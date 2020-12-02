@@ -9,7 +9,7 @@ from sklearn.base import ClassifierMixin
 
 class RazorLogReg:
     """
-    Implements logistic regression and compares it against a ranfom classifier.
+    This class implements a multinomiallogistic regression and compares it against a random classifier.
     """
     def __init__(self,
                  df: pd.DataFrame,
