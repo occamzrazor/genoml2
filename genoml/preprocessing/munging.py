@@ -108,7 +108,7 @@ class Munging(object):
         self.output_datafile = self.run_prefix + ".dataForML.h5"
         self.merged: Optional[pd.DataFrame] = None
 
-    def plink_inputs(self):
+    def plink_inputs(self, cleanup=True):
         # Initializing some variables
         self.pheno_df.to_hdf(self.output_datafile, key="pheno", mode="w")
         # raw_df = None
@@ -157,21 +157,19 @@ class Munging(object):
             # g_pruned.values[two_idx] = 0
             # g_pruned.values[zero_idx] = 2
 
-            self.merged = g.to_pandas()  # This is gonnabe too slow.
+            self.merged = g.to_pandas()
             del g
             self.merged.reset_index(inplace=True)
-            self.merged = self.merged.rename(columns={"sample": "ID"}, inplace=True)
-            #    del raw_df.index.name
-            #    del raw_df.columns.name
+            self.merged.rename(columns={"sample": "ID"}, inplace=True)
 
-            # now, remove temp_genos
-            # bash_rm_temp = "rm temp_genos.*"
-            # print(bash_rm_temp)
-            # subprocess.run(bash_rm_temp, shell=True)
+            if cleanup:
+                # Remove temp_genos
+                bash_rm_temp = "rm temp_genos.*"
+                print(bash_rm_temp)
+                subprocess.run(bash_rm_temp, shell=True)
             # Checking the impute flag and execute
             # Currently only supports mean and median
             self.merged = _fill_impute_na(self.impute_type, self.merged)
-            # raw_df.to_hdf(self.output_datafile, key="geno")
         # Checking the imputation of non-genotype features
 
         # Saving out the proper HDF5 file
@@ -195,7 +193,7 @@ class Munging(object):
         #     addit = pd.read_hdf(self.output_datafile, key="addit")
         #     # merged = pd.merge(pheno, addit, on="ID", how="inner")
         self.merged = _merge_dfs([self.pheno_df, self.merged, addit_df], col_id="ID")
-        del raw_df, addit_df
+        del addit_df
 
         self.merged = self.harmonize_refs(self.merged)
         self.merged.to_hdf(self.output_datafile, key="dataForML")
