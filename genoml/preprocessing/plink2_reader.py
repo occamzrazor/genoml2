@@ -55,7 +55,13 @@ def pgen_reader(pgen_file, output_file=None, ref_allele=0) -> np.ndarray:
 
         for variant_idxs in chunks:
             buf = np.empty((len(variant_idxs), subject_count), np.int8)
-            pf.read_list(variant_idxs, buf, allele_idx=ref_allele)
+            pf.read_list(variant_idxs, buf, allele_idx=np.uint32(ref_allele))
+
+            # Reverse 0 and 2. Segfaults if you attempt to use the allele_idx.
+            major_allele_counts = buf == 2
+            minor_allele_counts = buf == 0
+            buf[major_allele_counts] = 0
+            buf[minor_allele_counts] = 2
             blocks.append(buf.T)
 
     print("Merging chunks into a coherent array")
@@ -72,7 +78,7 @@ def pgen_reader(pgen_file, output_file=None, ref_allele=0) -> np.ndarray:
 def pvar_reader(pvar_file) -> pd.DataFrame:
     pvar_file = pathlib.Path(pvar_file)
     print("Reading in the Pvar file")
-    return pd.read_csv(
+    pvar_df = pd.read_csv(
         pvar_file,
         sep="\t",
         comment="#",
@@ -89,6 +95,9 @@ def pvar_reader(pvar_file) -> pd.DataFrame:
         index_col=False,
         low_memory=False,
     )
+    pvar_df["POS"] = pvar_df["POS"].astype(int)
+    pvar_df["QUAL"] = pvar_df["QUAL"].astype(float)
+    return pvar_df
 
 
 def psam_reader(psam_file) -> pd.DataFrame:
@@ -108,5 +117,26 @@ if __name__ == "__main__":
     pgen_file = "data/pre-plinked/ldpruned_data.pgen"
     out_file = "data/pre-plinked/full_plink2_matrix.npy"
     variant_call_array = pgen_reader(pgen_file, out_file)
-    phenotype_df = pvar_reader("data/pre-plinked/ldpruned_data.pvar")
+    variant_info = pvar_reader("data/pre-plinked/ldpruned_data.pvar")
     sample_df = psam_reader("data/pre-plinked/ldpruned_data.psam")
+
+    cytoband_file = "data/pre-plinked/cytoBand.txt"
+    cytoband_space = pd.read_csv(cytoband_file, sep="\t", names=["chromosome", "start_loc", "end_loc", "band_id", "band_name?"])
+
+    cytoband_space["CHROM"] = cytoband_space["chromosome"].str[3:]
+    cytoband_space["band_id"] = cytoband_space["CHROM"] + cytoband_space["band_id"]
+
+    nvs = []
+    for chrom, bands in cytoband_space.groupby("CHROM"):
+        criteria = []
+        values = []
+        variant_chrom = variant_info[variant_info["CHROM"] == chrom].copy()
+
+        for s, e, b in bands[['start_loc', 'end_loc', "band_id"]].apply(tuple, axis=1):
+            criteria += [variant_chrom["POS"].between(int(s), int(e))]
+            values += [b]
+
+        variant_chrom['BAND_ID'] = np.select(criteria, values, pd.NA)
+        variant_chrom['BAND_ID'] = variant_chrom['BAND_ID'].fillna(f"{chrom}.UNKNOWN")
+        nvs.append(variant_chrom)
+    variant_info = pd.concat(nvs)
