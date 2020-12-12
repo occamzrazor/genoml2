@@ -1,10 +1,11 @@
 from sklearn import metrics, model_selection
-from sklearn.linear_model import LogisticRegression
+from sklearn.linear_model import LogisticRegressionCV
 import pandas as pd
 from scipy import stats
 from sklearn.dummy import DummyClassifier
 from typing import NoReturn, Optional, Tuple
 from sklearn.base import ClassifierMixin
+import numpy as np
 
 
 class RazorLogReg:
@@ -13,31 +14,51 @@ class RazorLogReg:
     """
 
     def __init__(self,
-                 train_set: pd.DataFrame,
-                 test_set: pd.DataFrame,
+                 train_set: Optional[pd.DataFrame] = None,
+                 test_set: Optional[pd.DataFrame] = None,
                  max_iter=1000,
                  cv_count=3
                  ):
-
-        self.y_train = train_set['case_control_other_latest']
-        self.y_test = test_set['case_control_other_latest']
-        self.X_train = train_set.drop(columns=['participant_id', 'case_control_other_latest'])
-        self.X_test = test_set.drop(columns=['participant_id', 'case_control_other_latest'])
+        if train_set is not None:
+            self.y_train = train_set['case_control_other_latest']
+            self.X_train = train_set.drop(columns=['participant_id', 'case_control_other_latest'])
+        if test_set is not None:
+            self.y_test = test_set['case_control_other_latest']
+            self.X_test = test_set.drop(columns=['participant_id', 'case_control_other_latest'])
         
         self.max_iter = max_iter
         self.cv_count = cv_count
 
-    def get_logistic_regression(self) -> ClassifierMixin:
+    def logistic_regression(self) -> ClassifierMixin:
         """
         Fits and tunes logistic regression.
         """
-        # Initiallize logistic regression
-        log_reg = LogisticRegression(solver='saga',
-                                     multi_class='multinomial')
+        # Initiallize logistic regression (tol is set to a high value to finish with the example faster)
+        log_reg = LogisticRegressionCV(penalty='elasticnet',
+                                            solver='saga',
+                                            multi_class='multinomial', 
+                                            scoring='neg_log_loss',
+                                            Cs=list(np.power(10.0, np.arange(-10, 10))),
+                                            l1_ratios=[0.05, 0.1, 0.3, 0.5, 0.7, 0.9, 0.95],
+                                            class_weight='balanced',
+                                            tol=0.1
+                                           )
         
-        params = dict(C=stats.uniform(loc=0, scale=4), penalty=['l2', 'l1'])
+        # Return fitted Regularized Logistic Regression
+        return log_reg
+        """
+        #log_reg = LogisticRegression(penalty='elasticnet',
+                                     solver='saga',
+                                     multi_class='multinomial')
+                                     
+        #params = dict(C=stats.uniform(loc=0, scale=4), p=stats.uniform(loc=0, scale=1))
+        
+        #params = {'l1_penalty': [0.05, 0.1, 0.3, 0.5, 0.7, 0.9, 0.95],
+                  'alpha':[0.0001, 0.001, 0.01, 0.1, 1, 10, 100, 1000], 
+                  'class_weight':['balanced', None]}
 
         # Tune logistic regression with randomized search cv by maximizing the negative log-loss.
+        
         random_search = model_selection.RandomizedSearchCV(estimator=log_reg,
                                                            param_distributions=params,
                                                            scoring='neg_log_loss',
@@ -45,12 +66,14 @@ class RazorLogReg:
                                                            cv=self.cv_count,
                                                            n_jobs=-1,
                                                            verbose=0)
-        # Fit Regularized Logistic Regression
-        random_search.fit(self.X_train, self.y_train)
-        
-        # Return tuned model (i.e. best estimator)
-        return random_search.best_estimator_
-
+        """
+       
+    def get_logistic_regression(self, log_reg: Optional[ClassifierMixin] = None):
+        log_reg = log_reg
+        if not log_reg:
+            log_reg = self.logistic_regression()
+        return log_reg.fit(self.X_train, self.y_train)
+            
     def get_random_classifier(self) -> ClassifierMixin:
         """
         Fit random classifier.
