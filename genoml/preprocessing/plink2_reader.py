@@ -58,10 +58,11 @@ def pgen_reader(pgen_file, output_file=None, ref_allele=0) -> np.ndarray:
             pf.read_list(variant_idxs, buf, allele_idx=np.uint32(ref_allele))
 
             # Reverse 0 and 2. Segfaults if you attempt to use the allele_idx.
-            major_allele_counts = buf == 2
-            minor_allele_counts = buf == 0
-            buf[major_allele_counts] = 0
-            buf[minor_allele_counts] = 2
+            if ref_allele == 0:
+                major_allele_counts = buf == 2
+                minor_allele_counts = buf == 0
+                buf[major_allele_counts] = 0
+                buf[minor_allele_counts] = 2
             blocks.append(buf.T)
 
     print("Merging chunks into a coherent array")
@@ -120,23 +121,23 @@ if __name__ == "__main__":
     variant_info = pvar_reader("data/pre-plinked/ldpruned_data.pvar")
     sample_df = psam_reader("data/pre-plinked/ldpruned_data.psam")
 
-    cytoband_file = "data/pre-plinked/cytoBand.txt"
-    cytoband_space = pd.read_csv(cytoband_file, sep="\t", names=["chromosome", "start_loc", "end_loc", "band_id", "band_name?"])
-
-    cytoband_space["CHROM"] = cytoband_space["chromosome"].str[3:]
-    cytoband_space["band_id"] = cytoband_space["CHROM"] + cytoband_space["band_id"]
-
-    nvs = []
-    for chrom, bands in cytoband_space.groupby("CHROM"):
-        criteria = []
-        values = []
-        variant_chrom = variant_info[variant_info["CHROM"] == chrom].copy()
-
-        for s, e, b in bands[['start_loc', 'end_loc', "band_id"]].apply(tuple, axis=1):
-            criteria += [variant_chrom["POS"].between(int(s), int(e))]
-            values += [b]
-
-        variant_chrom['BAND_ID'] = np.select(criteria, values, pd.NA)
-        variant_chrom['BAND_ID'] = variant_chrom['BAND_ID'].fillna(f"{chrom}.UNKNOWN")
-        nvs.append(variant_chrom)
-    variant_info = pd.concat(nvs)
+    # cytoband_file = "data/pre-plinked/cytoBand.txt"
+    # cytoband_space = pd.read_csv(cytoband_file, sep="\t", names=["chromosome", "start_loc", "end_loc", "band_id", "band_name?"])
+    #
+    # cytoband_space["CHROM"] = cytoband_space["chromosome"].str[3:]
+    # cytoband_space["band_id"] = cytoband_space["CHROM"] + cytoband_space["band_id"]
+    #
+    # nvs = []
+    # for chrom, bands in cytoband_space.groupby("CHROM"):
+    #     criteria = []
+    #     values = []
+    #     variant_chrom = variant_info[variant_info["CHROM"] == chrom].copy()
+    #
+    #     for s, e, b in bands[['start_loc', 'end_loc', "band_id"]].apply(tuple, axis=1):
+    #         criteria += [variant_chrom["POS"].between(int(s), int(e))]
+    #         values += [b]
+    #
+    #     variant_chrom['BAND_ID'] = np.select(criteria, values, pd.NA)
+    #     variant_chrom['BAND_ID'] = variant_chrom['BAND_ID'].fillna(f"{chrom}.UNKNOWN")
+    #     nvs.append(variant_chrom)
+    # variant_info = pd.concat(nvs)
