@@ -5,7 +5,7 @@ from scipy import stats
 from sklearn.dummy import DummyClassifier
 from typing import Optional, Tuple
 from sklearn.base import ClassifierMixin
-import numpy as 
+import numpy as np
 
 
 
