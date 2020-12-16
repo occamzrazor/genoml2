@@ -3,9 +3,10 @@ from sklearn.linear_model import LogisticRegressionCV
 import pandas as pd
 from scipy import stats
 from sklearn.dummy import DummyClassifier
-from typing import NoReturn, Optional, Tuple
+from typing import Optional, Tuple
 from sklearn.base import ClassifierMixin
-import numpy as np
+import numpy as 
+
 
 
 class RazorLogReg:
@@ -16,7 +17,7 @@ class RazorLogReg:
     def __init__(self,
                  train_set: Optional[pd.DataFrame] = None,
                  test_set: Optional[pd.DataFrame] = None,
-                 max_iter=1000,
+                 max_iter=5000,
                  cv_count=3
                  ):
         if train_set is not None:
@@ -74,9 +75,10 @@ class RazorLogReg:
         """
         return algorithm.predict(self.X_test), algorithm.predict_proba(self.X_test)
     
+    @staticmethod
     def get_metrics(self, y_test, predictions:list, avg:str) -> list:
         accuracy = metrics.accuracy_score(y_test, predictions)
-        precision = metrics.precision_score(y_test, predictions, average=avg)
-        recall = metrics.recall_score(y_test, predictions, average=avg), 
+        precision = metrics.precision_score(y_test, predictions, average=avg, zero_division=1)
+        recall = metrics.recall_score(y_test, predictions, average=avg)
         f1 = metrics.f1_score(y_test, predictions, average=avg)
         return [accuracy, precision, recall, f1]
