@@ -37,7 +37,7 @@ def main(save_path):
                                         n_jobs=-1
                                       )
                                       
-    selector = RFECV(log_reg_fitted, step=2000)
+    selector = RFECV(log_reg_fitted, step=2000, cv=3)
     
     y_train = train['case_control_other_latest']
     train.drop(columns=['case_control_other_latest'], inplace=True)
@@ -45,4 +45,4 @@ def main(save_path):
     joblib.dump(trained_classifier, save_path)
 
 if __name__ == '__main__':
-    main(save_path='RFECV_log_reg')
+    main(save_path='RFECV_log_reg.joblib')
