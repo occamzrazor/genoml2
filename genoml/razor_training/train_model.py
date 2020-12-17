@@ -82,7 +82,7 @@ clf = linear_model.LogisticRegressionCV(Cs=C,
                                         scoring=SCORING,
                                         l1_ratios=L1_RATIOS,
                                         random_state=RANDOM_STATE)
-clf_rf = feature_selection.RFECV(clf, step=STEP, scoring=SCORING, n_jobs=-1, verbose=1).fit(X_train, y_train)
+clf_rf = feature_selection.RFECV(clf, step=STEP, cv=C, scoring=SCORING, n_jobs=-1, verbose=1).fit(X_train, y_train)
 
 # Save the model to file.
 model_file_name = 'rfecv_' + SCORING + '.joblib'
