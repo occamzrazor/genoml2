@@ -10,6 +10,7 @@ import time
 
 import numpy as np
 import pandas as pd
+import tqdm
 
 try:
     import pgenlib
@@ -29,7 +30,7 @@ except Exception as e:
     raise e
 
 
-def pgen_reader(pgen_file, output_file=None, ref_allele=0) -> np.ndarray:
+def pgen_reader(pgen_file, output_file=None, ref_allele=0, impute=None) -> np.ndarray:
     """This function reads in a .pgen file and outputs it to a file as a numpy array.
 
     * Values of `-9` indicate a missing call.
@@ -53,7 +54,7 @@ def pgen_reader(pgen_file, output_file=None, ref_allele=0) -> np.ndarray:
         blocks = []
         chunks = np.array_split(np.arange(0, variant_count, dtype=np.uint32), 500)
 
-        for variant_idxs in chunks:
+        for variant_idxs in tqdm.tqdm(chunks, desc="Reading pgen file chunks"):
             buf = np.empty((len(variant_idxs), subject_count), np.int8)
             pf.read_list(variant_idxs, buf, allele_idx=np.uint32(ref_allele))
 
@@ -63,6 +64,13 @@ def pgen_reader(pgen_file, output_file=None, ref_allele=0) -> np.ndarray:
                 minor_allele_counts = buf == 0
                 buf[major_allele_counts] = 0
                 buf[minor_allele_counts] = 2
+            if impute == "median":
+                # TODO: efficiently impute the median
+                buf[buf == -9] = 0
+            elif not impute:
+                pass
+            else:
+                raise NotImplementedError(f"{impute} imputation has not been implemented yet.")
             blocks.append(buf.T)
 
     print("Merging chunks into a coherent array")
@@ -117,7 +125,7 @@ def psam_reader(psam_file) -> pd.DataFrame:
 if __name__ == "__main__":
     pgen_file = "data/pre-plinked/ldpruned_data.pgen"
     out_file = "data/pre-plinked/full_plink2_matrix.npy"
-    variant_call_array = pgen_reader(pgen_file, out_file)
+    variant_call_array = pgen_reader(pgen_file, None)
     variant_info = pvar_reader("data/pre-plinked/ldpruned_data.pvar")
     sample_df = psam_reader("data/pre-plinked/ldpruned_data.psam")
 
