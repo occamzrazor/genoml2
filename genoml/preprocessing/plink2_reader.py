@@ -42,6 +42,7 @@ def pgen_reader(pgen_file, output_file=None, ref_allele=0, impute=None) -> np.nd
     :param ref_allele: The reference allele in the .pgen file. When `ref_allele = 1`,
         values of `0` and `2` are switched. If there is no `ref_allele1` in the .pgen
         file, this program will segfault.
+    :param impute: To impute the magic numbers or not. Currently only supports "median".
     :return: A numpy array with each row being a separate subject, each column being a
         separate SNV. The column indices will align with their row in the .pvar file.
     """
@@ -55,8 +56,9 @@ def pgen_reader(pgen_file, output_file=None, ref_allele=0, impute=None) -> np.nd
         chunks = np.array_split(np.arange(0, variant_count, dtype=np.uint32), 500)
 
         for variant_idxs in tqdm.tqdm(chunks, desc="Reading pgen file chunks"):
-            buf = np.empty((len(variant_idxs), subject_count), np.int8)
-            pf.read_list(variant_idxs, buf, allele_idx=np.uint32(ref_allele))
+            # buf = np.empty((len(variant_idxs), subject_count), np.int8)
+            buf = np.empty((subject_count, len(variant_idxs)), np.int8)
+            pf.read_list(variant_idxs, buf, allele_idx=np.int32(0), sample_maj=True)
 
             # Reverse 0 and 2. Segfaults if you attempt to use the allele_idx.
             if ref_allele == 0:
@@ -71,7 +73,7 @@ def pgen_reader(pgen_file, output_file=None, ref_allele=0, impute=None) -> np.nd
                 pass
             else:
                 raise NotImplementedError(f"{impute} imputation has not been implemented yet.")
-            blocks.append(buf.T)
+            blocks.append(buf)
 
     print("Merging chunks into a coherent array")
     start_time = time.time()
