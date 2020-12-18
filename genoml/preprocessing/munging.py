@@ -331,7 +331,7 @@ def get_plink_bash_scripts_options(
         bash1a = f"{plink_exec} --bfile {geno_path}"
         bash1b = (
             f"{plink_exec} --bfile {geno_path} --extract "
-            f"{run_prefix}.p_threshold_variants.tab"
+            f"{run_prefix}.p_threshold_variants.tab --make-bed --out temp_genos"
         )
         # may want to consider outputting temp_genos to dir in run_prefix
         bash2 = f"{plink_exec} --bfile {geno_path} --make-bed --out temp_genos"
@@ -340,7 +340,7 @@ def get_plink_bash_scripts_options(
 
         # Set the bash command groups
         cmds_a = [bash1a, bash2, bash3, bash4]
-        cmds_b = [bash1b, bash2, bash3, bash4]
+        cmds_b = [bash1b, bash3, bash4]
     return cmds_a, cmds_b
 
 
