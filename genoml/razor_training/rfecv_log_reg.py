@@ -1,24 +1,21 @@
-import train_test_split
 from sklearn.linear_model import LogisticRegression
 from sklearn.feature_selection import RFECV
 import joblib
+import numpy as np
 
-SAVE_PATH = 'rfecv_log_reg.joblib'
-OUTPUT_PATH = '/Users/mdmcastanos/genomlRazor/genoml/razor_training/data_pre-plinked/'
+SAVE_PATH = '/Users/mdmcastanos/genomlRazor/genoml/razor_training/models/rfecv_log_reg.joblib'
+DATA_PATH = '/Users/mdmcastanos/genomlRazor/genoml/razor_training/data_pre-plinked/'
 C = 3
 MAX_ITER = 1000
 L1_RATIO = 0.5
 STEP = 0.2
 SCORING = 'balanced_accuracy'
-
-train_X, test_X, train_y, test_y = train_test_split.get_train_test(OUTPUT_PATH + "ldpruned_data.pgen",
-                                                                   OUTPUT_PATH + "ldpruned_data.psam",
-                                                                   OUTPUT_PATH + "amp_pd_case_control.tsv",
-                                                                   output_file=OUTPUT_PATH + "train_test_split.npz"
-                                                                   )
-
-del test_X
-del test_y
+CLASS = 'multinomial'
+features_file = DATA_PATH + 'train_test_split.npz'
+data = np.load(features_file)
+train_X = data['train_X']
+train_y = data['train_y']
+del data    
 
 def main(multi_labels):
     log_reg_object = LogisticRegression(penalty='elasticnet',
@@ -37,4 +34,4 @@ def main(multi_labels):
 
 
 if __name__ == "__main__":
-    main('multinomial')
+    main(CLASS)
