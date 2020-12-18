@@ -47,8 +47,6 @@ class SelectFeatures:
             selected_features = ensemble.ExtraTreesClassifier(n_estimators=self.k).fit(X, y)
             selected = SelectFromModel(selected_features, prefit=True)
         elif method == 'Univariate':
-            if not self.k:
-                raise ValueError("Have to pass number of features to be kept, k when using 'Univariate' method.")
             if self.test == 'chi2':
                 selected = SelectKBest(chi2, k=self.k).fit(X, y)
             elif self.test == 'mutual':
