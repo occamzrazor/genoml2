@@ -8,6 +8,9 @@ import numpy as np
 import pandas as pd
 from sklearn import feature_selection, linear_model, model_selection
 
+import multiprocessing as mp
+mp.set_start_method("fork")
+
 RANDOM_STATE = 42
 
 # Feature file.
@@ -49,14 +52,15 @@ X_train, X_test, y_train, y_test = model_selection.train_test_split(X, y, test_s
 # Remove reference to original feature array in case garbage collection kicks in to save memory.
 del X
 
-with open('train_test.npy', 'wb') as f:
-    np.save(f, X_train)
-    np.save(f, X_test)
-    np.save(f, y_train)
-    np.save(f, y_test)
+#with open('train_test.npy', 'wb') as f:
+#    np.save(f, X_train)
+#    np.save(f, X_test)
+#    np.save(f, y_train)
+#    np.save(f, y_test)
 
 # Set learning parameters.
-C = 3
+REGULARIZATION = 10
+CROSS_VALIDATION = 5
 MAX_ITER = 1000
 L1_RATIOS = [0, 0.2, 0.5, 0.8, 1]
 STEP = 0.2
@@ -70,20 +74,30 @@ STEP = 0.2
 # https://scikit-learn.org/stable/modules/model_evaluation.html#the-scoring-parameter-defining-model-evaluation-rules
 SCORING = 'balanced_accuracy'
 
+# NOTE(berk): If memory isn't an issue, I recommend setting it to -2.
+N_JOBS = -2
+
+# NOTE(berk): Verbosity.
+LOG_REG_VERBOSITY = 2
+RFECF_VERBOSITY = 1
+
 # Train and test logistic regression with cross-validation.
 # NOTE(berk): Turn all the function calls below into a function so that it is not repeated.
-clf = linear_model.LogisticRegressionCV(Cs=C,
+clf = linear_model.LogisticRegressionCV(Cs=REGULARIZATION,
+                                        cv=CROSS_VALIDATION,
                                         penalty='elasticnet',
                                         solver='saga',
                                         max_iter=MAX_ITER,
                                         class_weight='balanced',
-                                        n_jobs=-2,
-                                        verbose=0,
+                                        n_jobs=N_JOBS,
+                                        verbose=LOG_REG_VERBOSITY,
                                         scoring=SCORING,
                                         l1_ratios=L1_RATIOS,
-                                        random_state=RANDOM_STATE)
-clf_rf = feature_selection.RFECV(clf, step=STEP, cv=C, scoring=SCORING, n_jobs=-2, verbose=1).fit(X_train, y_train)
+                                        random_state=RANDOM_STATE).fit(X_train, y_train)
+#clf_rf = feature_selection.RFECV(clf, step=STEP, cv=CROSS_VALIDATION, scoring=SCORING, n_jobs=N_JOBS, verbose=1).fit(X_train, y_train)
 
 # Save the model to file.
-model_file_name = 'rfecv_' + SCORING + '.joblib'
-dump(clf_rf, model_file_name)
+#model_file_name = 'rfecv_' + SCORING + '.joblib'
+#dump(clf_rf, model_file_name)
+model_file_name = 'logregcv_' + SCORING + '.joblib'
+dump(clf, model_file_name) 
