@@ -1,5 +1,6 @@
 """Splits the data into train/test numpy arrays."""
 
+import pathlib
 
 import numpy as np
 import pandas as pd
@@ -35,9 +36,15 @@ def get_train_test(pgen_file, psam_file, case_control_file, output_file=None):
     test_y = y[test_idx]
     del X
 
+    output_file = pathlib.Path(output_file)
     if output_file:
+        train_patient_file = output_file.parent.joinpath(output_file.stem + "_train_patients.tsv")
+        test_patient_file = output_file.parent.joinpath(output_file.stem + "_test_patients.tsv")
+        patient_df.iloc[train_idx, :][["IID"]].to_csv(train_patient_file, sep="\t", index=False)
+        patient_df.iloc[test_idx, :][["IID"]].to_csv(test_patient_file, sep="\t", index=False)
+
         np.savez(
-            "data/pre-plinked/train_test_split.npz", train_X=train_X, test_X=test_X, train_y=train_y, test_y=test_y
+            output_file, train_X=train_X, test_X=test_X, train_y=train_y, test_y=test_y
         )
 
     return train_X, test_X, train_y, test_y
