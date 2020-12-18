@@ -6,6 +6,8 @@
 
 [![Downloads](https://static.pepy.tech/personalized-badge/genoml2?period=total&units=international_system&left_color=black&right_color=grey&left_text=Downloads)](https://pepy.tech/project/genoml2)
 
+> Updated 16 Dec 2020: Latest Release on pip! v1.0.0.beta.9 
+
 # How to Get Started with GenoML
 
 
@@ -64,6 +66,8 @@ pip install -r requirements.txt
             # brew install gcc@7
         # conda install -c conda-forge xgboost 
         # pip install xgboost==0.90
+    # If issues installing umap 
+        # pip install umap-learn 
 
 ## MISC
 # To deactivate the virtual environment
