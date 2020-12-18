@@ -15,6 +15,7 @@
 
 import pathlib
 import subprocess
+
 # Import the necessary packages
 from typing import List, Optional, Tuple
 
@@ -268,9 +269,7 @@ class Munging(object):
                 "of 0. Let's remove that for you..."
                 "\n"
             )
-            addit_keep = addit_df.drop(
-                std[std == 0.0].index.values, axis=1
-            )
+            addit_keep = addit_df.drop(std[std == 0.0].index.values, axis=1)
             addit_keep_list = list(addit_keep.columns.values)
 
             addit_df = addit_df[addit_keep_list]
