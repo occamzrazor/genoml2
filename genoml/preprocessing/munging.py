@@ -20,6 +20,7 @@ from typing import List, Optional, Tuple
 import numpy as np
 import pandas as pd
 from pandas_plink import read_plink1_bin
+from scipy import stats
 
 # Define the munging class
 import genoml.dependencies
@@ -44,8 +45,8 @@ class Munging(object):
 
         if impute_type not in ["mean", "median"]:
             # Currently only supports mean and median
-            raise KeyError(
-                "The 2 types of imputation currently supportevd are 'mean' and 'median'"
+            raise ValueError(
+                "The 2 types of imputation currently supported are 'mean' and 'median'"
             )
         self.impute_type = impute_type
         self.p_gwas = p_gwas
@@ -83,21 +84,18 @@ class Munging(object):
         self.gwas_path = gwas_path
         self.geno_path = geno_path
         if not addit_path:
-            print("No additional non-genotypical features supplied.")
-            # "No additional features as predictors? No problem, we'll stick to genotypes."
+            print("No additional features as predictors? No problem, we'll stick to genotypes.")
         else:
             self.addit_df = pd.read_csv(addit_path, engine="c")
 
         if not gwas_path:
-            print("No GWAS data supplied.")
-            # "So you don't want to filter on P values from external GWAS? No worries, we don't usually either (if the dataset is large enough)."
+            print("So you don't want to filter on P values from external GWAS? No worries, we don't usually either (if the dataset is large enough).")
         else:
             self.gwas_df = pd.read_csv(gwas_path, engine="c")
 
         if not geno_path:
             print(
-                "So no genotypes? Okay, we'll just use additional features provided "
-                "for the predictions."
+                "So no genotypes? Okay, we'll just use additional features provided for the predictions."
             )
         else:
             print("Exporting genotype data")
@@ -110,54 +108,19 @@ class Munging(object):
         self.pheno_df.to_hdf(self.output_datafile, key="pheno", mode="w")
         addit_df = None
 
-        if self.geno_path:
-            self._run_external_plink_commands()
-
-            # read_plink1_bin reads in non-reference alleles. When `ref="a1"` (default),
-            # it counts "a0" alleles. We want to read homozygous minor allele as 2 and
-            # homozygous for major allele as 0. ref="a0" ensures we are counting the
-            # homozygous minor alleles. This matches the .raw labels.
-            g = read_plink1_bin("temp_genos.bed", ref="a0")
-            g = g.drop(
-                [
-                    "fid",
-                    "father",
-                    "mother",
-                    "gender",
-                    "trait",
-                    "chrom",
-                    "cm",
-                    "pos",
-                    "a1",
-                ]
-            )
-
-            g = g.set_index({"sample": "iid", "variant": "snp"})
-
-            self.merged = g.to_pandas()
-            del g
-            self.merged.reset_index(inplace=True)
-            self.merged = self.merged.rename(columns={"sample": "ID"}, inplace=True)
-
-            # now, remove temp_genos
-            bash_rm_temp = "rm temp_genos.*"
-            print(bash_rm_temp)
-            subprocess.run(bash_rm_temp, shell=True)
-            # Checking the impute flag and execute
-            # Currently only supports mean and median
-            self.merged = _fill_impute_na(self.impute_type, self.merged)
+        genotype_df = self.load_genotypes()
 
         # Checking the imputation of non-genotype features
         if self.addit_path:
             addit_df = self.munge_additional_features()
 
-        self.merged = _merge_dfs([self.pheno_df, self.merged, addit_df], col_id="ID")
-        del addit_df
+        merged = _merge_dfs([self.pheno_df, genotype_df, addit_df], col_id="ID")
+        del addit_df, genotype_df  # We dont need these copies anymore
 
-        self.merged = self.harmonize_refs(self.merged)
-        self.merged.to_hdf(self.output_datafile, key="dataForML")
+        merged = self.harmonize_refs(merged)
+        merged.to_hdf(self.output_datafile, key="dataForML")
 
-        features_list = self.merged.columns.tolist()
+        features_list = merged.columns.tolist()
 
         features_listpath = f"{self.run_prefix}.list_features.txt"
         with open(features_listpath, "w") as f:
@@ -172,13 +135,44 @@ class Munging(object):
             f"{self.output_datafile}"
         )
 
+        self.merged = merged
         return self.merged
+
+    def load_genotypes(self) -> Optional[pd.DataFrame]:
+        if not self.geno_path:
+            return None
+
+        self._run_external_plink_commands()
+        # read_plink1_bin reads in non-reference alleles. When `ref="a1"` (default),
+        # it counts "a0" alleles. We want to read homozygous minor allele as 2 and
+        # homozygous for major allele as 0. ref="a0" ensures we are counting the
+        # homozygous minor alleles. This matches the .raw labels.
+        g = read_plink1_bin("temp_genos.bed", ref="a0")
+        g = g.drop(
+            ["fid", "father", "mother", "gender", "trait", "chrom", "cm", "pos","a1"]
+        )
+
+        g = g.set_index({"sample": "iid", "variant": "snp"})
+
+        genotype_df = g.to_pandas()
+        del g  # We dont need this copy anymore
+        genotype_df.reset_index(inplace=True)
+        genotype_df.rename(columns={"sample": "ID"}, inplace=True)
+
+        # now, remove temp_genos
+        bash_rm_temp = "rm temp_genos.*"
+        print(bash_rm_temp)
+        subprocess.run(bash_rm_temp, shell=True)
+        # Checking the impute flag and execute
+        # Currently only supports mean and median
+        merged = _fill_impute_na(self.impute_type, genotype_df)
+        return merged
 
     def _run_external_plink_commands(self) -> None:
         """Runs the external plink commands from the command line."""
         if not self.geno_path:
             return
-        cmds_a, cmds_b = get_bash_scripts(
+        cmds_a, cmds_b = get_plink_bash_scripts_options(
             self.skip_prune, self.geno_path, self.run_prefix, self.r2
         )
         if self.gwas_path:
@@ -187,12 +181,14 @@ class Munging(object):
             snps_to_keep = gwas_df_reduced.loc[(gwas_df_reduced["p"] <= p_thresh)]
             outfile = self.run_prefix + ".p_threshold_variants.tab"
             snps_to_keep.to_csv(outfile, index=False, sep="\t")
-            print(f"Your candidate variant list is right here: {outfile}.")
+            prune_str = "" if self.skip_prune else "prior to pruning "
+            print(f"Your candidate variant list {prune_str}is right here: {outfile}.")
             cmds = cmds_b
         else:
             cmds = cmds_a
+        pruned = "" if self.skip_prune else "pruned "
         print(
-            "A list of variants and the allele being counted in the dosages "
+            f"A list of {pruned}variants and the allele being counted in the dosages "
             "(usually the minor allele) can be found here: "
             f"{self.run_prefix}.variants_and_alleles.tab"
         )
@@ -248,9 +244,7 @@ class Munging(object):
                     "flag this column to be scaled.",
                 )
             else:
-                addit_df[col] = (addit_df[col] - addit_df[col].mean()) / addit_df[
-                    col
-                ].std(ddof=0)
+                addit_df[col] = stats.zscore(addit_df[col], ddof=0)
 
         print(
             "\n"
@@ -309,7 +303,7 @@ class Munging(object):
         return matching_cols
 
 
-def get_bash_scripts(
+def get_plink_bash_scripts_options(
     skip_prune: bool, geno_path: str, run_prefix: str, r2: Optional[str] = None
 ) -> Tuple[List, List]:
     """Gets the PLINK bash scripts to be run from CLI."""
