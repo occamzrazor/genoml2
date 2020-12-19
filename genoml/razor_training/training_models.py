@@ -4,7 +4,7 @@ import dimensionality_reduction
 from sklearn import linear_model
 
 MODEL_PATH = './models/'
-DATA_PATH = './data_pre-plinked/'
+DATA_PATH = './data/pre-plinked/l'
 C = 3
 MAX_ITER = 1000
 L1_RATIOS = [0, 0.2, 0.5, 0.8, 1]
