@@ -8,6 +8,7 @@ DATA_PATH = './data/pre-plinked/'
 C = 3
 MAX_ITER = 1000
 L1_RATIOS = [0, 0.2, 0.5, 0.8, 1]
+CS = list(np.power(10.0, np.arange(-5, 5)))
 SCORING = 'balanced_accuracy'
 RANDOM_STATE = 42
 features_file = DATA_PATH + 'train_test_split.npz'
@@ -19,7 +20,7 @@ del data
 
 
 def fit_tune_log_reg(X, y):
-    model = linear_model.LogisticRegressionCV(Cs=C,
+    model = linear_model.LogisticRegressionCV(Cs=CS,
                                               penalty='elasticnet',
                                               solver='saga',
                                               max_iter=MAX_ITER,
@@ -28,7 +29,9 @@ def fit_tune_log_reg(X, y):
                                               verbose=0,
                                               scoring=SCORING,
                                               l1_ratios=L1_RATIOS,
-                                              random_state=RANDOM_STATE)
+                                              random_state=RANDOM_STATE,
+                                              cv=C
+                                             )
     return model.fit(X, y)
 
 
