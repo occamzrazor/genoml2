@@ -13,9 +13,9 @@ SCORING = 'balanced_accuracy'
 RANDOM_STATE = 42
 features_file = DATA_PATH + 'train_test_split.npz'
 data = np.load(features_file)
-train_X = data['train_X'][:, 200]
+train_X = data['train_X']
 train_y = data['train_y']
-test_X = data['test_X'][:, 200]
+test_X = data['test_X']
 del data
 
 
