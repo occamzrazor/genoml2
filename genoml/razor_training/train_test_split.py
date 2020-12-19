@@ -13,7 +13,7 @@ RANDOM_STATE = 42
 
 def get_train_test(pgen_file, psam_file, case_control_file, output_file=None):
     patient_df = plink2_reader.psam_reader(psam_file)[["IID"]]
-    patient_labels = pd.read_csv(case_control_file)[
+    patient_labels = pd.read_csv(case_control_file,  sep='\t')[
         ["participant_id", "diagnosis_latest", "case_control_other_latest"]
     ]
     patient_labels["y"] = patient_labels["case_control_other_latest"] == "Case"
