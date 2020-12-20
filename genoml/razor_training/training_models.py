@@ -35,7 +35,7 @@ def fit_tune_log_reg(X, y):
     return model.fit(X, y)
 
 
-def select_features(filename, k=100, method=None, test=None):
+def select_features(filename, method=None, test=None):
     if method == 'univariate':
         if test == 'chi2':
             select_data = dimensionality_reduction.SelectFeatures(k=k, method=method, test=test)
@@ -55,10 +55,10 @@ def select_features(filename, k=100, method=None, test=None):
 
 
 def main():
-    select_features('tree', k=1000)
-    select_features('univariate_ftest', k=1000, method='Univariate')
-    select_features('univariate_chi2', k=1000, method='Univariate', test='chi2')
-    select_features('univariate_mutual', k=1000, method='Univariate', test='mutual')
+    select_features('tree')
+    select_features('univariate_ftest', method='Univariate')
+    select_features('univariate_chi2', method='Univariate', test='chi2')
+    select_features('univariate_mutual', method='Univariate', test='mutual')
 
 
 if __name__ == "__main__":
