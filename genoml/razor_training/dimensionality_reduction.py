@@ -11,7 +11,7 @@ class SelectFeatures:
     """
 
     def __init__(self,
-                 k: int,
+                 k: int = 100,
                  method: str = 'ExtraTrees',
                  test: str = None
                  ):
