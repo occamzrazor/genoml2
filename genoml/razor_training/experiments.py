@@ -60,7 +60,11 @@ def univariate_f_classif(filename=None):
 
 def univariate_mutual(filename=None):
     discrete_mutual_info_classif = partial(mutual_info_classif, random_state=RANDOM_STATE, discrete_features=[0, 1, 2])
-    model = SelectKBest(score_func=discrete_mutual_info_classif).fit(train_X, train_y)
+    X_float64 = train_X.astype(float64)
+    y_float64 = train_y.astype(float64)
+    model = SelectKBest(score_func=discrete_mutual_info_classif).fit(X_float64, y_float64)
+    del X_float64
+    del y_float64
     train_top_n(model, filename)
 
 
