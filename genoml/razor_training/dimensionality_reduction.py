@@ -44,15 +44,15 @@ class SelectFeatures:
         Perform feature selection using an extra-trees classifier. 
         """
         if self.method == 'ExtraTrees':
-            selected_features = ensemble.ExtraTreesClassifier(n_estimators=self.k).fit_trasform(X, y)
+            selected_features = ensemble.ExtraTreesClassifier(n_estimators=self.k).fit(X, y)
             selected = SelectFromModel(selected_features, prefit=True)
         elif self.method == 'Univariate':
             if self.test == 'chi2':
-                selected = SelectKBest(chi2, k=self.k).fit_trasform(X, y)
+                selected = SelectKBest(chi2, k=self.k).fit_transform(X, y)
             elif self.test == 'mutual':
-                selected = SelectKBest(mutual_info_classif, k=self.k).fit_trasform(X, y)
+                selected = SelectKBest(mutual_info_classif, k=self.k).fit_transform(X, y)
             else:
-                selected = SelectKBest(f_classif, k=self.k).fit_trasform(X, y)
+                selected = SelectKBest(f_classif, k=self.k).fit_transform(X, y)
         else:
             raise ValueError("Only the methods 'ExtraTrees', and 'Univariate' are supported.")
         return selected
