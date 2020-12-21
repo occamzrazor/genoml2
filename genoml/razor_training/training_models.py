@@ -37,15 +37,16 @@ def fit_tune_log_reg(X, y):
 
 
 def select_features(filename, method=None, test=None):
+    outf = filename+'_features.npy'
     if method == 'univariate':
         if test == 'chi2':
-            select_data = dimensionality_reduction.SelectFeatures(k=K, method=method, test=test)
+            select_data = dimensionality_reduction.SelectFeatures(k=K, method=method, test=test, outfile=outf)
         elif test == 'mutual':
-            select_data = dimensionality_reduction.SelectFeatures(k=K, method=method, test=test)
+            select_data = dimensionality_reduction.SelectFeatures(k=K, method=method, test=test, outfile=outf)
         else:
-            select_data = dimensionality_reduction.SelectFeatures(k=K, method=method)
+            select_data = dimensionality_reduction.SelectFeatures(k=K, method=method, outfile=outf)
     else:
-        select_data = dimensionality_reduction.SelectFeatures(k=K)
+        select_data = dimensionality_reduction.SelectFeatures(k=K, outfile=outf)
     train_X_reduced = select_data.get_reduced_dataset(train_X, train_y)
     test_X_reduced = select_data.get_test_set_reduced(test_X)
     trained_model = fit_tune_log_reg(train_X_reduced, train_y)
@@ -56,10 +57,10 @@ def select_features(filename, method=None, test=None):
 
 
 def main():
-    #select_features('tree')
+    select_features('tree')
     select_features('univariate_ftest', method='Univariate')
-    #select_features('univariate_chi2', method='Univariate', test='chi2')
-    #select_features('univariate_mutual', method='Univariate', test='mutual')
+    select_features('univariate_chi2', method='Univariate', test='chi2')
+    select_features('univariate_mutual', method='Univariate', test='mutual')
 
 
 if __name__ == "__main__":
