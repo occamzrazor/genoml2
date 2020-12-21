@@ -28,9 +28,9 @@ class SelectFeatures:
         if not model:
             model = self.features_selection(X, y)
 
-        self.features_selected = model.get_support()
-        X_reduced = X[:, self.features_selected]
-        return X_reduced
+        #self.features_selected = model.get_support()
+        #X_reduced = X[:, self.features_selected]
+        return model
 
     def get_test_set_reduced(self, X_test):
         """
