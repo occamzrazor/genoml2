@@ -57,7 +57,7 @@ def select_features(filename, method=None, test=None):
 
 
 def main():
-    select_features('tree')
+    #select_features('tree')
     select_features('univariate_ftest', method='Univariate')
     select_features('univariate_chi2', method='Univariate', test='chi2')
     select_features('univariate_mutual', method='Univariate', test='mutual')
