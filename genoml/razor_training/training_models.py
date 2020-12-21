@@ -11,6 +11,7 @@ L1_RATIOS = [0, 0.2, 0.5, 0.8, 1]
 CS = list(np.power(10.0, np.arange(-5, 5)))
 SCORING = 'balanced_accuracy'
 RANDOM_STATE = 42
+K = 10000
 features_file = DATA_PATH + 'train_test_split.npz'
 data = np.load(features_file)
 train_X = data['train_X']
@@ -38,13 +39,13 @@ def fit_tune_log_reg(X, y):
 def select_features(filename, method=None, test=None):
     if method == 'univariate':
         if test == 'chi2':
-            select_data = dimensionality_reduction.SelectFeatures(k=k, method=method, test=test)
+            select_data = dimensionality_reduction.SelectFeatures(k=K, method=method, test=test)
         elif test == 'mutual':
-            select_data = dimensionality_reduction.SelectFeatures(k=k, method=method, test=test)
+            select_data = dimensionality_reduction.SelectFeatures(k=K, method=method, test=test)
         else:
-            select_data = dimensionality_reduction.SelectFeatures(k=k, method=method)
+            select_data = dimensionality_reduction.SelectFeatures(k=K, method=method)
     else:
-        select_data = dimensionality_reduction.SelectFeatures(k=k)
+        select_data = dimensionality_reduction.SelectFeatures(k=K)
     train_X_reduced = select_data.get_reduced_dataset(train_X, train_y)
     test_X_reduced = select_data.get_test_set_reduced(test_X)
     trained_model = fit_tune_log_reg(train_X_reduced, train_y)
