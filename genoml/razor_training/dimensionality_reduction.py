@@ -44,7 +44,7 @@ class SelectFeatures:
         X_test_reduced = X_test[:, self.features_selected]
         return X_test_reduced
 
-    def features_selection(X, y, self) -> ClassifierMixin:
+    def features_selection(self, X, y) -> ClassifierMixin:
         """
         Perform feature selection using an extra-trees classifier. 
         """
