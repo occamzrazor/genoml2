@@ -15,7 +15,7 @@ class SelectFeatures:
                  k: int = 10000,
                  method: str = 'ExtraTrees',
                  test: str = None, 
-                 outfile: str
+                 outfile: str = None
                  ):
 
         self.method = method
@@ -32,7 +32,8 @@ class SelectFeatures:
             model = self.features_selection(X, y)
         # Save selected features by the model
         self.features_selected = model.get_support()
-        np.save(self.outfile, np.where(self.features_selected))
+        if outfile:
+            np.save(self.outfile, np.where(self.features_selected))
         # Return reduced dataset
         return model.transform(X)
 
