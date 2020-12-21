@@ -57,7 +57,7 @@ def univariate_f_classif(filename=None):
 
 
 def univariate_mutual(filename=None):
-    model = SelectKBest(mutual_info_classif, k=K, discrete_features=True, random_state=RANDOM_STATE).fit(train_X, train_y)
+    model = mutual_info_classif(k=K, discrete_features=True, random_state=RANDOM_STATE).fit(train_X, train_y)
     train_top_n(model, filename)
 
 
