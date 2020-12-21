@@ -3,6 +3,7 @@ import numpy as np
 from sklearn import linear_model
 from sklearn import ensemble
 from sklearn.feature_selection import SelectFromModel, SelectKBest, f_classif, chi2, mutual_info_classif
+from sklearn.model_selection import StratifiedKFold
 from typing import Optional
 from functools import partial
 
@@ -26,6 +27,7 @@ del data
 
 
 def fit_tune_log_reg(X, y):
+    skf = StratifiedKFold(n_splits=C, shuffle=True)
     model = linear_model.LogisticRegressionCV(Cs=CS,
                                               penalty='elasticnet',
                                               solver='saga',
@@ -36,7 +38,7 @@ def fit_tune_log_reg(X, y):
                                               scoring=SCORING,
                                               l1_ratios=L1_RATIOS,
                                               random_state=RANDOM_STATE,
-                                              cv=C
+                                              cv=skf
                                               )
     return model.fit(X, y)
 
