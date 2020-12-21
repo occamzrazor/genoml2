@@ -2,9 +2,9 @@ import joblib
 import numpy as np
 from sklearn import linear_model
 from sklearn import ensemble
-from sklearn.decomposition import PCA
 from sklearn.feature_selection import SelectFromModel, SelectKBest, f_classif, chi2, mutual_info_classif
 from typing import Optional
+from functools import partial
 
 PATH = './experiments/'
 DATA_PATH = './data/pre-plinked/'
@@ -57,7 +57,8 @@ def univariate_f_classif(filename=None):
 
 
 def univariate_mutual(filename=None):
-    model = mutual_info_classif(k=K, discrete_features=True, random_state=RANDOM_STATE).fit(train_X, train_y)
+    discrete_mutual_info_classif = partial(mutual_info_classif, random_state=RANDOM_STATE, discrete_features=[0, 1, 2])
+    model = SelectKBest(score_func=discrete_mutual_info_classif).fit(train_X, train_y)
     train_top_n(model, filename)
 
 
