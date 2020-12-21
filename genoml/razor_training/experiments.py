@@ -60,8 +60,8 @@ def univariate_f_classif(filename=None):
 
 def univariate_mutual(filename=None):
     discrete_mutual_info_classif = partial(mutual_info_classif, random_state=RANDOM_STATE, discrete_features=[0, 1, 2])
-    X_float64 = train_X.astype(float64)
-    y_float64 = train_y.astype(float64)
+    X_float64 = train_X.astype('float64')
+    y_float64 = train_y.astype('float64')
     model = SelectKBest(score_func=discrete_mutual_info_classif).fit(X_float64, y_float64)
     del X_float64
     del y_float64
@@ -104,14 +104,6 @@ def get_top_features(sorted_by_score, top_n, filename: Optional[str] = None):
                 X_to_test=X_to_test)
 
     return X_to_train
-
-
-def PCA(self, X_reduced: np.array, y: np.array) -> np.array:
-    """
-        Perform PCA on reduced dataset
-    """
-    pca = PCA(n_components=0.95)
-    return pca.fit_transform(X_reduced, y)
 
 
 def main():
