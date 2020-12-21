@@ -1,7 +1,7 @@
 from sklearn import ensemble
 import pandas as pd
 from sklearn.feature_selection import SelectFromModel, SelectKBest, f_classif, chi2, mutual_info_classif
-from typing import Optional, NoReturn
+from typing import Optional
 from sklearn.base import ClassifierMixin
 import numpy as np
 from sklearn.decomposition import PCA
