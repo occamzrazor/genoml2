@@ -91,7 +91,7 @@ def get_top_features(sorted_by_score, top_n, filename: Optional[str] = None):
     features_to_train = list(sorted_by_score.keys())[:top_n]
     X_to_train = train_X[:, features_to_train]
     if filename:
-        X_to_test = test_X[features_to_train]
+        X_to_test = test_X[:, features_to_train]
         np.savez("{}_{}_test.npz".format(filename, top_n),
                 features=np.array(features_to_train),
                 X_to_test=X_to_test)
