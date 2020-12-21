@@ -26,7 +26,7 @@ class SelectFeatures:
         Return training dataset containing features selected in the features_selected step.
         """
         if not model:
-            model = self.features_selection(X, y, self.method)
+            model = self.features_selection(X, y)
 
         self.features_selected = model.get_support()
         X_reduced = X[:, self.features_selected]
@@ -39,20 +39,20 @@ class SelectFeatures:
         X_test_reduced = X_test[:, self.features_selected]
         return X_test_reduced
 
-    def features_selection(self, X, y, method) -> ClassifierMixin:
+    def features_selection(self, X, y) -> ClassifierMixin:
         """
         Perform feature selection using an extra-trees classifier. 
         """
-        if method == 'ExtraTrees':
-            selected_features = ensemble.ExtraTreesClassifier(n_estimators=self.k).fit(X, y)
+        if self.method == 'ExtraTrees':
+            selected_features = ensemble.ExtraTreesClassifier(n_estimators=self.k).fit_trasform(X, y)
             selected = SelectFromModel(selected_features, prefit=True)
-        elif method == 'Univariate':
+        elif self.method == 'Univariate':
             if self.test == 'chi2':
-                selected = SelectKBest(chi2, k=self.k).fit(X, y)
+                selected = SelectKBest(chi2, k=self.k).fit_trasform(X, y)
             elif self.test == 'mutual':
-                selected = SelectKBest(mutual_info_classif, k=self.k).fit(X, y)
+                selected = SelectKBest(mutual_info_classif, k=self.k).fit_trasform(X, y)
             else:
-                selected = SelectKBest(f_classif, k=self.k).fit(X, y)
+                selected = SelectKBest(f_classif, k=self.k).fit_trasform(X, y)
         else:
             raise ValueError("Only the methods 'ExtraTrees', and 'Univariate' are supported.")
         return selected
