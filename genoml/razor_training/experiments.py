@@ -42,7 +42,7 @@ def fit_tune_log_reg(X, y):
 
 
 def tree(filename=None):
-    model = ensemble.ExtraTreesClassifier().fit(train_X, train_y)
+    model = ensemble.ExtraTreesClassifier(random_state=RANDOM_STATE).fit(train_X, train_y)
     train_top_n(model, filename, is_tree='Tree')
 
 
@@ -110,8 +110,8 @@ def PCA(self, X_reduced: np.array, y: np.array) -> np.array:
 
 def main():
     tree('tree')
-    univariate_chi2('univariate_chi2')
-    univariate_f_classif('univariate_fclassif')
+    #univariate_chi2('univariate_chi2')
+    #univariate_f_classif('univariate_fclassif')
     univariate_mutual('univariate_mutual')
 
 
