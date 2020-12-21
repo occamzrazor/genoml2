@@ -68,12 +68,13 @@ def train_top_n(model, filename, is_tree=None):
 
 
 def get_dictionary(model, top_n, is_tree=None):
-    boolean = model.get_support()
     feature_importance = None
     if is_tree:
         feature_importance = model.feature_importances_
+        model = SelectFromModel(model, prefit=True)
     else:
         feature_importance = model.scores_
+    boolean = model.get_support()
     features_scores = dict(zip(np.where(boolean)[0], feature_importance[boolean]))
     sorted_by_score = dict(sorted(features_scores.items(), key=lambda item: item[1]))
     return sorted_by_score
