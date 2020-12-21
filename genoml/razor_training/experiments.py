@@ -7,7 +7,7 @@ from sklearn.feature_selection import SelectFromModel, SelectKBest, f_classif, c
 from typing import Optional
 
 PATH = './experiments/'
-DATA_PATH = './data_pre-plinked/'
+DATA_PATH = './data/pre-plinked/'
 C = 3
 MAX_ITER = 1000
 L1_RATIOS = [0, 0.2, 0.5, 0.8, 1]
