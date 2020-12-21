@@ -22,6 +22,7 @@ del data
 
 
 
+
 def fit_tune_log_reg(X, y):
     model = linear_model.LogisticRegressionCV(Cs=CS,
                                               penalty='elasticnet',
@@ -37,16 +38,15 @@ def fit_tune_log_reg(X, y):
                                               )
     return model.fit(X, y)
 
-
-def get_dataset(filename, top_n):
-    data = np.load(RESULTS_PATH + "{}/{}_{}_test.npz".format(filename, filename, top_n))
-    selected_features = data['features']
-    test_X = data['X_to_test']
+def get_dataset(train_X, filename, top_n):
+    data_result = np.load(RESULTS_PATH + "{}/{}_{}_test.npz".format(filename, filename, top_n))
+    selected_features = data_result['features']
+    test_X = data_result['X_to_test']
     train_X_reduced = train_X[:, selected_features]
-    X = np.concatenate((train_X, train_X_reduced), axis=0)
+    X = np.concatenate((train_X_reduced, test_X), axis=0)
     del train_X
     del test_X
-    return train_X_reduced[:, :50]
+    return X
 
 
 def fit_PCA(X, y):
@@ -58,9 +58,9 @@ def fit_PCA(X, y):
 
 def save_model(filename):
     for top_n in TOP_N_LIST:
-        X_reduced = get_dataset(filename, top_n)
-        X_pca = fit_PCA(X_reduced, train_y)
-        pca_train_X = split_data(X, filename, top_n)
+        X = get_dataset(train_X, filename, top_n)
+        X_pca = fit_PCA(X, train_y)
+        pca_train_X = split_data(X_pca, filename, top_n)
         model = fit_tune_log_reg(pca_train_X, train_y)
         joblib.dump(model, "pca/{}_{}_pca.joblib".format(filename, top_n))
 
@@ -68,7 +68,7 @@ def save_model(filename):
 def split_data(X, filename, top_n):
     X_train = X[:N, :]
     X_test = X[N:len(X), :]
-    np.savez("pca/{}/{}_{}.npz".format(filename, filename, top_n))
+    np.savez("pca/{}/{}_{}.npz".format(filename, filename, top_n), X_train=X_train, X_test=X_test)
     return X_train
 
 
@@ -79,3 +79,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
