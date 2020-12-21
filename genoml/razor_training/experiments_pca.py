@@ -21,8 +21,6 @@ train_y = data['train_y']
 del data
 
 
-
-
 def fit_tune_log_reg(X, y):
     model = linear_model.LogisticRegressionCV(Cs=CS,
                                               penalty='elasticnet',
@@ -37,6 +35,7 @@ def fit_tune_log_reg(X, y):
                                               cv=C
                                               )
     return model.fit(X, y)
+
 
 def get_dataset(train_X, filename, top_n):
     data_result = np.load(RESULTS_PATH + "{}/{}_{}_test.npz".format(filename, filename, top_n))
@@ -55,6 +54,7 @@ def fit_PCA(X, y):
     """
     pca = PCA(n_components=0.95, svd_solver='full')
     return pca.fit_transform(X, y)
+
 
 def save_model(filename):
     for top_n in TOP_N_LIST:
@@ -77,6 +77,6 @@ def main():
     save_model('univariate_chi2')
     save_model('univariate_fclassif')
 
+    
 if __name__ == "__main__":
     main()
-
