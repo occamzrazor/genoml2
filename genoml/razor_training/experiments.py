@@ -43,7 +43,6 @@ def fit_tune_log_reg(X, y):
 
 def tree(filename=None):
     model = ensemble.ExtraTreesClassifier().fit(train_X, train_y)
-    model = SelectFromModel(model, prefit=True)
     train_top_n(model, filename, is_tree='Tree')
 
 
