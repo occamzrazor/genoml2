@@ -27,7 +27,7 @@ del data
 
 
 def fit_tune_log_reg(X, y):
-    skf = StratifiedKFold(n_splits=C, shuffle=True)
+    skf = StratifiedKFold(n_splits=C, shuffle=True, random_state=RANDOM_STATE)
     model = linear_model.LogisticRegressionCV(Cs=CS,
                                               penalty='elasticnet',
                                               solver='saga',
