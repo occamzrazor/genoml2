@@ -108,9 +108,9 @@ def PCA(self, X_reduced: np.array, y: np.array) -> np.array:
 
 
 def main():
-    tree('tree')
-    univariate_chi2('univariate_chi2')
-    univariate_f_classif('univariate_fclassif')
+    #tree('tree')
+    #univariate_chi2('univariate_chi2')
+    #univariate_f_classif('univariate_fclassif')
     univariate_mutual('univariate_mutual')
 
 
