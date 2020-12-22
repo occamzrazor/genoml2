@@ -1,29 +1,92 @@
 import joblib
+import pathlib
 import numpy as np
 from sklearn import linear_model
 from sklearn import ensemble
-from sklearn.feature_selection import SelectFromModel, SelectKBest, f_classif, chi2, mutual_info_classif
+from sklearn import feature_selection  # import SelectFromModel, SelectKBest, f_classif, chi2, mutual_info_classif
 from sklearn.model_selection import StratifiedKFold
-from typing import Optional
+from sklearn import model_selection
+from typing import Optional, List
 from functools import partial
 
-PATH = './experiments/'
-DATA_PATH = './data/pre-plinked/'
-C = 3
-MAX_ITER = 1000
-L1_RATIOS = [0, 0.2, 0.5, 0.8, 1]
-CS = list(np.power(10.0, np.arange(-5, 5)))
-SCORING = 'balanced_accuracy'
+
+# PATH = './experiments/'
+# DATA_PATH = './data/pre-plinked/'
+# C = 3
+# MAX_ITER = 1000
+# L1_RATIOS = [0, 0.2, 0.5, 0.8, 1]
+# CS = list(np.power(10.0, np.arange(-5, 5)))
+# SCORING = 'balanced_accuracy'
 RANDOM_STATE = 42
-K = 10000
-features_file = DATA_PATH + 'train_test_split.npz'
-data = np.load(features_file)
-train_X = data['train_X']
-train_y = data['train_y']
-test_X = data['test_X']
+# K = 10000
+# features_file = DATA_PATH + 'train_test_split.npz'
+# data = np.load(features_file)
+# train_X = data['train_X']
+# train_y = data['train_y']
+# test_X = data['test_X']
 TOP_N_LIST = [100, 1000, K]
 
-del data
+
+class TopKSelectors(object):
+    def __init__(self, train_X: np.ndarray, train_y: np.ndarray, test_X: Optional = None, test_y: Optional = None, ks: Optional[List[int]] = None):
+        self.train_x = train_X
+        self.train_y = train_y
+
+        if ks is None:
+            self.ks = max(self.train_x.shape[1], 10000)
+
+        # self.cv_count = 3
+        # self.max_iter = 1000
+        # self.l1_ratios = [0, 0.2, 0.5, 0.8, 1]
+        # self.Cs = list(np.power(10.0, np.arange(-5, 5)))
+        # self.scoring = "balanced_accuracy"
+
+    @classmethod
+    def load_experiments(cls, data_path, k=None) -> "Experiments":
+        data_path = pathlib.Path(data_path)
+        data = np.load(data_path.joinpath("train_test_split.npz"))
+
+        return cls(data["train_X"], data["train_y"], data.get("test_X"), data.get("test_y"), k=k)
+
+    def output(self, directory):
+        pass
+
+    def fit_tune_log_reg(self):
+        sss = model_selection.StratifiedShuffleSplit(n_splits=self.cv_count)
+        model = linear_model.LogisticRegressionCV(
+            Cs=self.Cs,
+            penalty='elasticnet',
+            solver='saga',
+            max_iter=self.max_iter,
+            class_weight='balanced',
+            n_jobs=-2,
+            verbose=0,
+            scoring=self.scoring,
+            l1_ratios=self.l1_ratios,
+            random_state=RANDOM_STATE,
+            cv=sss
+        )
+        return model.fit(self.train_x, self.train_y)  # Do I return here? Why?
+
+    def tree_selection(self):
+        model = ensemble.ExtraTreesClassifier(
+            random_state=RANDOM_STATE
+        ).fit(self.train_x, self.train_y)
+        return model
+        train_top_n(model, filename, is_tree='Tree')  # ?
+
+    def select_k_best(self, score_funct) -> np.array[bool]:
+        model = feature_selection.SelectKBest(score_funct, k=max(self.ks)).fit(
+            self.train_X,
+            self.train_y,
+        )
+        feature_scores = list()
+        for n, score in enumerate(model.scores_):
+            feature_scores.append((n, score))
+        feature_scores = OrderedDict(sorted(feature_scores), key=lambda x: x[1])
+        for k in self.ks:
+            feature_scores[:k]
+        return None
 
 
 def fit_tune_log_reg(X, y):
@@ -49,7 +112,7 @@ def tree(filename=None):
 
 
 def univariate_chi2(filename=None):
-    model = SelectKBest(chi2, k=K).fit(train_X, train_y)
+    model = feature_selection.SelectKBest(feature_selection.chi2, k=K).fit(train_X, train_y)
     train_top_n(model, filename)
 
 
@@ -74,16 +137,16 @@ def train_top_n(model, filename, is_tree=None):
         get_save_model(sorted_by_score, top_n, filename)
 
 
-def get_dictionary(model, top_n, is_tree=None):
-    feature_importance = None
+def get_dictionary(model, is_tree=None):
     if is_tree:
         feature_importance = model.feature_importances_
-        model = SelectFromModel(model, prefit=True)
+        model = feature_selection.SelectFromModel(model, prefit=True)
     else:
         feature_importance = model.scores_
     boolean = model.get_support()
+    from collections import OrderedDict
     features_scores = dict(zip(np.where(boolean)[0], feature_importance[boolean]))
-    sorted_by_score = dict(sorted(features_scores.items(), key=lambda item: item[1]))
+    sorted_by_score = OrderedDict(sorted(features_scores.items(), key=lambda item: item[1]))
     return sorted_by_score
 
 
