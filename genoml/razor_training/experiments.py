@@ -6,8 +6,10 @@ import numpy as np
 import pandas as pd
 import tqdm
 from sklearn import (  # import SelectFromModel, SelectKBest, f_classif, chi2, mutual_info_classif
+    dummy,
     feature_selection,
     linear_model,
+    metrics,
     model_selection,
 )
 
@@ -89,8 +91,37 @@ class LogRegExperiment(object):
 
     def train_model(self) -> None:
         self.model.fit(self.train_x, self.train_y)
-        # TODO: Update the results
-        self.results = pd.DataFrame()
+        self.score_model()
+
+    def score_model(self):
+        if self.test_y is None:
+            raise Exception("CANNOT SCORE WITH NO TEST")
+        scores = dict()
+        scores["LogReg"] = _score_model(self.model, self.test_x, self.test_y)
+
+        scores.update(self._score_dummy())
+        self.results = pd.DataFrame(scores)
+        return self.results
+
+    def _score_dummy(self) -> Dict:
+        dummy_freq = dummy.DummyClassifier(
+            strategy="most_frequent", random_state=RANDOM_STATE
+        )
+        dummy_freq.fit(self.train_x, self.train_y)
+        freq_score = _score_model(dummy_freq, self.test_x, self.test_y)
+
+        dummy_strat = dummy.DummyClassifier(
+            strategy="stratified", random_state=RANDOM_STATE
+        )
+        dummy_strat.fit(self.train_x, self.train_y)
+        strat_score = _score_model(dummy_strat, self.test_x, self.test_y)
+
+        return {"frequency_dummy": freq_score, "stratified_score": strat_score}
+
+
+def _score_model(clf, test_x, test_y) -> Dict[str, float]:
+    score = metrics.balanced_accuracy_score(test_y, clf.predict(test_x))
+    return {"balanced_accuracy": score}
 
 
 class TopKSelectors(object):
@@ -109,7 +140,7 @@ class TopKSelectors(object):
         self.test_y = test_y
 
         if ks is None:
-            ks = [100, 1000, 10000]
+            ks = [100]  # , 1000, 10000]
         ks = [max(self.train_x.shape[1], k) for k in ks]
         self.ks = list(set(ks))
 
@@ -202,8 +233,11 @@ def main():
 
     tks.save("data/results_t1")
 
-    pass
+    for exp in tks._logreg_experiments.values():
+        print(exp.results)
 
 
 if __name__ == "__main__":
     main()
+    completed = True
+    print("Completed!")
