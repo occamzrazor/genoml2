@@ -1,179 +1,208 @@
-import joblib
 import pathlib
+from typing import Dict, List, Optional
+
+import joblib
 import numpy as np
-from sklearn import linear_model
-from sklearn import ensemble
-from sklearn import feature_selection  # import SelectFromModel, SelectKBest, f_classif, chi2, mutual_info_classif
-from sklearn.model_selection import StratifiedKFold
-from sklearn import model_selection
-from typing import Optional, List
-from functools import partial
+import pandas as pd
+import tqdm
+from sklearn import (  # import SelectFromModel, SelectKBest, f_classif, chi2, mutual_info_classif
+    feature_selection,
+    linear_model,
+    model_selection,
+)
 
-
-# PATH = './experiments/'
-# DATA_PATH = './data/pre-plinked/'
-# C = 3
-# MAX_ITER = 1000
-# L1_RATIOS = [0, 0.2, 0.5, 0.8, 1]
-# CS = list(np.power(10.0, np.arange(-5, 5)))
-# SCORING = 'balanced_accuracy'
 RANDOM_STATE = 42
-# K = 10000
-# features_file = DATA_PATH + 'train_test_split.npz'
-# data = np.load(features_file)
-# train_X = data['train_X']
-# train_y = data['train_y']
-# test_X = data['test_X']
-TOP_N_LIST = [100, 1000, K]
 
 
-class TopKSelectors(object):
-    def __init__(self, train_X: np.ndarray, train_y: np.ndarray, test_X: Optional = None, test_y: Optional = None, ks: Optional[List[int]] = None):
-        self.train_x = train_X
+class LogRegExperiment(object):
+    def __init__(
+        self,
+        train_x: np.ndarray,
+        train_y: np.ndarray,
+        test_x: Optional[np.ndarray] = None,
+        test_y: Optional[np.ndarray] = None,
+    ):
+        self.train_x = train_x
         self.train_y = train_y
 
-        if ks is None:
-            self.ks = max(self.train_x.shape[1], 10000)
+        self.test_x = test_x
+        self.test_y = test_y
 
-        # self.cv_count = 3
-        # self.max_iter = 1000
-        # self.l1_ratios = [0, 0.2, 0.5, 0.8, 1]
-        # self.Cs = list(np.power(10.0, np.arange(-5, 5)))
-        # self.scoring = "balanced_accuracy"
+        self.results: Optional[pd.DataFrame] = None  ## ??????????
 
-    @classmethod
-    def load_experiments(cls, data_path, k=None) -> "Experiments":
-        data_path = pathlib.Path(data_path)
-        data = np.load(data_path.joinpath("train_test_split.npz"))
+        self.cv_count = 3
+        self.max_iter = 1000
+        self.l1_ratios = [0, 0.2, 0.5, 0.8, 1]
+        self.Cs = list(np.power(10.0, np.arange(-5, 5)))
+        self.scoring = "balanced_accuracy"
+        self.model = linear_model.LogisticRegressionCV()
+        self.init_model()
 
-        return cls(data["train_X"], data["train_y"], data.get("test_X"), data.get("test_y"), k=k)
-
-    def output(self, directory):
-        pass
-
-    def fit_tune_log_reg(self):
+    def init_model(self):
         sss = model_selection.StratifiedShuffleSplit(n_splits=self.cv_count)
-        model = linear_model.LogisticRegressionCV(
+        self.model = linear_model.LogisticRegressionCV(
             Cs=self.Cs,
-            penalty='elasticnet',
-            solver='saga',
+            penalty="elasticnet",
+            solver="saga",
             max_iter=self.max_iter,
-            class_weight='balanced',
+            class_weight="balanced",
             n_jobs=-2,
-            verbose=0,
+            verbose=1,
             scoring=self.scoring,
             l1_ratios=self.l1_ratios,
             random_state=RANDOM_STATE,
-            cv=sss
+            cv=sss,
         )
-        return model.fit(self.train_x, self.train_y)  # Do I return here? Why?
 
-    def tree_selection(self):
-        model = ensemble.ExtraTreesClassifier(
-            random_state=RANDOM_STATE
+    @classmethod
+    def load_experiment(cls, data_dir) -> "LogRegExperiment":
+        data_dir = pathlib.Path(data_dir)
+        data = np.load(data_dir.joinpath("data.npz"))
+        logreg_model = joblib.load(data_dir.joinpath("model.joblib"))
+
+        self = cls(
+            data["train_X"], data["train_y"], data.get("test_X"), data.get("test_y")
+        )
+        self.model = logreg_model
+
+        return self
+
+    def save_experiment(self, directory):
+        directory = pathlib.Path(directory)
+        model_file = directory.joinpath("logreg_model.joblib")
+        assert not model_file.exists()
+        joblib.dump(self.model, model_file)
+
+        if self.results:
+            self.results.to_csv(directory.joinpath("results.tsv"), sep="\t")
+
+        if self.test_x:
+            np.savez(
+                "data.npz",
+                train_X=self.train_x,
+                train_y=self.train_y,
+                test_X=self.test_x,
+                test_y=self.test_y,
+            )
+        else:
+            np.savez("data.npz", train_X=self.train_x, train_y=self.train_y)
+
+    def train_model(self) -> None:
+        self.model.fit(self.train_x, self.train_y)
+        # TODO: Update the results
+        self.results = pd.DataFrame()
+
+
+class TopKSelectors(object):
+    def __init__(
+        self,
+        train_X: np.ndarray,
+        train_y: np.ndarray,
+        test_X: Optional = None,
+        test_y: Optional = None,
+        ks: Optional[List[int]] = None,
+    ):
+        self.train_x = train_X
+        self.train_y = train_y
+
+        self.test_x = test_X
+        self.test_y = test_y
+
+        if ks is None:
+            ks = [100, 1000, 10000]
+        ks = [max(self.train_x.shape[1], k) for k in ks]
+        self.ks = list(set(ks))
+
+        self._logreg_experiments: Dict[int, LogRegExperiment] = dict()
+
+        self.selector_model = feature_selection.SelectKBest(
+            feature_selection.chi2, k=max(self.ks)
+        )
+        self.feature_importance = np.empty(0, dtype=np.int)
+
+    @classmethod
+    def load_from_data(cls, data_path, k=None, prefit=False) -> "Experiments":
+        data_path = pathlib.Path(data_path)
+        prefit = False
+        if prefit:
+            # TODO(will)
+            pass
+        else:
+            data = np.load(data_path.joinpath("train_test_split.npz"))
+            self = cls(
+                data["train_X"],
+                data["train_y"],
+                data.get("test_X"),
+                data.get("test_y"),
+                ks=k,
+            )
+        return self
+
+    def save(self, directory):
+        directory = pathlib.Path(directory)
+        directory.mkdir(exist_ok=True)
+
+        if self.selector_model:
+            joblib.dump(
+                self.selector_model, directory.joinpath("selector_model.joblib")
+            )
+
+        for k, exp in self._logreg_experiments.items():
+            k_selected_dir = directory.joinpath(f"selected_{k}")
+            exp.save_experiment(k_selected_dir)
+
+    def fit_feature_selection_model(self, scoring_funct=None) -> np.ndarray:
+        if scoring_funct is None:
+            scoring_funct = feature_selection.chi2
+        self.selector_model = feature_selection.SelectKBest(
+            scoring_funct, k=max(self.ks)
         ).fit(self.train_x, self.train_y)
-        return model
-        train_top_n(model, filename, is_tree='Tree')  # ?
+        self.feature_importance = (-self.selector_model.scores_).argsort()
+        return self.feature_importance
 
-    def select_k_best(self, score_funct) -> np.array[bool]:
-        model = feature_selection.SelectKBest(score_funct, k=max(self.ks)).fit(
-            self.train_X,
-            self.train_y,
-        )
-        feature_scores = list()
-        for n, score in enumerate(model.scores_):
-            feature_scores.append((n, score))
-        feature_scores = OrderedDict(sorted(feature_scores), key=lambda x: x[1])
+    def initialize_logreg_experiments(self):
         for k in self.ks:
-            feature_scores[:k]
-        return None
+            # Initialize the logreg experiments
+            variant_mask = self.feature_importance < k
+            logreg_exp = LogRegExperiment(self.train_x[:, variant_mask], self.train_y)
+            if self.test_x:
+                logreg_exp.test_x = self.test_x[:, variant_mask]
+                logreg_exp.test_y = self.test_y
+
+            self._logreg_experiments[k] = logreg_exp
+
+    def fit_logreg_experiments(self):
+        if not self._logreg_experiments:
+            self.initialize_logreg_experiments()
+        pbar = tqdm.tqdm(
+            self._logreg_experiments.items(), desc="Training the LogReg experiments"
+        )
+        for k, exp in pbar:
+            pbar.set_description(
+                f"Training the LogReg experiments; k={k}", refresh=True
+            )
+            exp.train_model()
 
 
-def fit_tune_log_reg(X, y):
-    skf = StratifiedKFold(n_splits=C, shuffle=True, random_state=RANDOM_STATE)
-    model = linear_model.LogisticRegressionCV(Cs=CS,
-                                              penalty='elasticnet',
-                                              solver='saga',
-                                              max_iter=MAX_ITER,
-                                              class_weight='balanced',
-                                              n_jobs=-2,
-                                              verbose=0,
-                                              scoring=SCORING,
-                                              l1_ratios=L1_RATIOS,
-                                              random_state=RANDOM_STATE,
-                                              cv=skf
-                                              )
-    return model.fit(X, y)
-
-
-def tree(filename=None):
-    model = ensemble.ExtraTreesClassifier(random_state=RANDOM_STATE).fit(train_X, train_y)
-    train_top_n(model, filename, is_tree='Tree')
-
-
-def univariate_chi2(filename=None):
-    model = feature_selection.SelectKBest(feature_selection.chi2, k=K).fit(train_X, train_y)
-    train_top_n(model, filename)
-
-
-def univariate_f_classif(filename=None):
-    model = SelectKBest(f_classif, k=K).fit(train_X, train_y)
-    train_top_n(model, filename)
-
-
-def univariate_mutual(filename=None):
-    discrete_mutual_info_classif = partial(mutual_info_classif, random_state=RANDOM_STATE, discrete_features=[0, 1, 2])
-    X_float64 = train_X.astype('float64')
-    y_float64 = train_y.astype('float64')
-    model = SelectKBest(score_func=discrete_mutual_info_classif).fit(X_float64, y_float64)
-    del X_float64
-    del y_float64
-    train_top_n(model, filename)
-
-
-def train_top_n(model, filename, is_tree=None):
-    for top_n in TOP_N_LIST:
-        sorted_by_score = get_dictionary(model, top_n, is_tree)
-        get_save_model(sorted_by_score, top_n, filename)
-
-
-def get_dictionary(model, is_tree=None):
-    if is_tree:
-        feature_importance = model.feature_importances_
-        model = feature_selection.SelectFromModel(model, prefit=True)
-    else:
-        feature_importance = model.scores_
-    boolean = model.get_support()
-    from collections import OrderedDict
-    features_scores = dict(zip(np.where(boolean)[0], feature_importance[boolean]))
-    sorted_by_score = OrderedDict(sorted(features_scores.items(), key=lambda item: item[1]))
-    return sorted_by_score
-
-
-def get_save_model(sorted_by_score, top_n, filename):
-    X_to_train = get_top_features(sorted_by_score, top_n, filename)
-    trained_model = fit_tune_log_reg(X_to_train, train_y)
-    if filename:
-        joblib.dump(trained_model, PATH + "{}_{}_model.joblib".format(filename, top_n))
-
-
-def get_top_features(sorted_by_score, top_n, filename: Optional[str] = None):
-    features_to_train = list(sorted_by_score.keys())[:top_n]
-    X_to_train = train_X[:, features_to_train]
-    if filename:
-        X_to_test = test_X[:, features_to_train]
-        np.savez("{}_{}_test.npz".format(filename, top_n),
-                features=np.array(features_to_train),
-                X_to_test=X_to_test)
-
-    return X_to_train
+# def univariate_mutual(filename=None):
+#     discrete_mutual_info_classif = partial(mutual_info_classif, random_state=RANDOM_STATE, discrete_features=[0, 1, 2])
+#     X_float64 = train_X.astype('float64')
+#     y_float64 = train_y.astype('float64')
+#     model = SelectKBest(score_func=discrete_mutual_info_classif).fit(X_float64, y_float64)
+#     del X_float64
+#     del y_float64
+#     train_top_n(model, filename)
 
 
 def main():
-    #tree('tree')
-    #univariate_chi2('univariate_chi2')
-    #univariate_f_classif('univariate_fclassif')
-    univariate_mutual('univariate_mutual')
+    data_path = "data/pre-plinked"
+    tks = TopKSelectors.load_from_data(data_path, k=[100, 1000, 10000])
+    tks.fit_feature_selection_model()
+    tks.fit_logreg_experiments()
+
+    tks.save("data/results_t1")
+
+    pass
 
 
 if __name__ == "__main__":
