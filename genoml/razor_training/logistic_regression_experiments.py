@@ -5,13 +5,7 @@ import joblib
 import numpy as np
 import pandas as pd
 import tqdm
-from sklearn import (  # import SelectFromModel, SelectKBest, f_classif, chi2, mutual_info_classif
-    dummy,
-    feature_selection,
-    linear_model,
-    metrics,
-    model_selection,
-)
+from sklearn import dummy, feature_selection, linear_model, metrics, model_selection
 from sklearn.utils.validation import check_is_fitted
 
 RANDOM_STATE = 42
@@ -158,7 +152,7 @@ class TopKSelectorsExperiment(object):
 
     @classmethod
     def load_experiment(
-            cls, data_path, experiment_dir=None, ks=None
+        cls, data_path, experiment_dir=None, ks=None
     ) -> "TopKSelectorsExperiment":
         data_path = pathlib.Path(data_path)
         data = np.load(data_path.joinpath("train_test_split.npz"))
@@ -235,8 +229,9 @@ def main():
     data_path = pathlib.Path("data/pre-plinked")
     experiment_dir = pathlib.Path("data/logistic_regression_experiments")
     if experiment_dir.exists():
-        tks = TopKSelectorsExperiment.load_experiment(data_path,
-                                                      experiment_dir=experiment_dir)
+        tks = TopKSelectorsExperiment.load_experiment(
+            data_path, experiment_dir=experiment_dir
+        )
     else:
         tks = TopKSelectorsExperiment.load_experiment(data_path)
         tks.fit_feature_selection_model()
