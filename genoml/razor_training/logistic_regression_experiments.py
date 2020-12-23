@@ -66,7 +66,7 @@ class LogRegExperiment(object):
             data["train_X"], data["train_y"], data.get("test_X"), data.get("test_y")
         )
         self.model = logreg_model
-
+        self.score_model()
         return self
 
     def save_experiment(self, directory):
@@ -79,16 +79,17 @@ class LogRegExperiment(object):
         if self.results is not None:
             self.results.to_csv(directory.joinpath("results.tsv"), sep="\t")
 
+        data_file = directory.joinpath("data.npz")
         if self.test_x is not None:
             np.savez(
-                "data.npz",
+                data_file,
                 train_X=self.train_x,
                 train_y=self.train_y,
                 test_X=self.test_x,
                 test_y=self.test_y,
             )
         else:
-            np.savez("data.npz", train_X=self.train_x, train_y=self.train_y)
+            np.savez(data_file, train_X=self.train_x, train_y=self.train_y)
 
     def train_model(self) -> None:
         self.model.fit(self.train_x, self.train_y)
