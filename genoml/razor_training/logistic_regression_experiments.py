@@ -26,7 +26,7 @@ class LogRegExperiment(object):
         self.test_x = test_x
         self.test_y = test_y
 
-        self.results: Optional[pd.DataFrame] = None  ## ??????????
+        self.results: Optional[pd.DataFrame] = None
 
         self.cv_count = 3
         self.max_iter = 1000
@@ -92,7 +92,7 @@ class LogRegExperiment(object):
         fit = True
         try:
             check_is_fitted(self.model)
-        except NotFittedError as e:
+        except NotFittedError:
             fit = False
         except Exception as e:
             raise e
@@ -182,7 +182,7 @@ class TopKSelectorsExperiment(object):
                 self.model = joblib.load(fo)
 
         for logreg_exp_dir in experiment_dir.glob("selected_*"):
-            k = logreg_exp_dir.name.split("_")[-1]
+            k = int(logreg_exp_dir.name.split("_")[-1])
             logreg_exp = LogRegExperiment.load_experiment(logreg_exp_dir)
             self._logreg_experiments[k] = logreg_exp
 
