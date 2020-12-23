@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 import tqdm
 from sklearn import dummy, feature_selection, linear_model, metrics, model_selection
+from sklearn.exceptions import NotFittedError
 from sklearn.utils.validation import check_is_fitted
 
 RANDOM_STATE = 42
@@ -88,7 +89,14 @@ class LogRegExperiment(object):
             np.savez(data_file, train_X=self.train_x, train_y=self.train_y)
 
     def train_model(self, refit=False) -> None:
-        if not check_is_fitted(self.model) or refit:
+        fit = True
+        try:
+            check_is_fitted(self.model)
+        except NotFittedError as e:
+            fit = False
+        except Exception as e:
+            raise e
+        if not fit or refit:
             self.model.fit(self.train_x, self.train_y)
         self.score_model()
 
@@ -228,7 +236,7 @@ class TopKSelectorsExperiment(object):
 def main():
     data_path = pathlib.Path("data/pre-plinked")
     experiment_dir = pathlib.Path("data/logistic_regression_experiments")
-    if experiment_dir.exists():
+    if experiment_dir.joinpath("selector_model.joblib").exists():
         tks = TopKSelectorsExperiment.load_experiment(
             data_path, experiment_dir=experiment_dir
         )
