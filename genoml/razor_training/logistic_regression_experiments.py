@@ -12,6 +12,7 @@ from sklearn import (  # import SelectFromModel, SelectKBest, f_classif, chi2, m
     metrics,
     model_selection,
 )
+from sklearn.utils.validation import check_is_fitted
 
 RANDOM_STATE = 42
 
@@ -60,7 +61,8 @@ class LogRegExperiment(object):
     def load_experiment(cls, data_dir) -> "LogRegExperiment":
         data_dir = pathlib.Path(data_dir)
         data = np.load(data_dir.joinpath("data.npz"))
-        logreg_model = joblib.load(data_dir.joinpath("model.joblib"))
+        with open(data_dir.joinpath("model.joblib"), "rb") as fo:
+            logreg_model = joblib.load(fo)
 
         self = cls(
             data["train_X"], data["train_y"], data.get("test_X"), data.get("test_y")
@@ -73,8 +75,8 @@ class LogRegExperiment(object):
         directory = pathlib.Path(directory)
         directory.mkdir(exist_ok=False)
 
-        model_file = directory.joinpath("logreg_model.joblib")
-        joblib.dump(self.model, model_file)
+        with open(directory.joinpath("logreg_model.joblib"), "wb") as fi:
+            joblib.dump(self.model, fi)
 
         if self.results is not None:
             self.results.to_csv(directory.joinpath("results.tsv"), sep="\t")
@@ -91,8 +93,9 @@ class LogRegExperiment(object):
         else:
             np.savez(data_file, train_X=self.train_x, train_y=self.train_y)
 
-    def train_model(self) -> None:
-        self.model.fit(self.train_x, self.train_y)
+    def train_model(self, refit=False) -> None:
+        if not check_is_fitted(self.model) or refit:
+            self.model.fit(self.train_x, self.train_y)
         self.score_model()
 
     def score_model(self):
@@ -142,7 +145,7 @@ class TopKSelectorsExperiment(object):
         self.test_y = test_y
 
         if ks is None:
-            ks = [100]  # , 1000, 10000]
+            ks = [100, 1000, 10000]
         ks = [min(self.train_x.shape[1], k) for k in ks]
         self.ks = list(set(ks))
 
@@ -154,21 +157,33 @@ class TopKSelectorsExperiment(object):
         self.feature_importance = np.empty(0, dtype=np.int)
 
     @classmethod
-    def load_from_data(cls, data_path, k=None, prefit=False) -> "Experiments":
+    def load_experiment(
+            cls, data_path, experiment_dir=None, ks=None
+    ) -> "TopKSelectorsExperiment":
         data_path = pathlib.Path(data_path)
-        prefit = False
-        if prefit:
-            # TODO(will)
-            pass
-        else:
-            data = np.load(data_path.joinpath("train_test_split.npz"))
-            self = cls(
-                data["train_X"],
-                data["train_y"],
-                data.get("test_X"),
-                data.get("test_y"),
-                ks=k,
-            )
+        data = np.load(data_path.joinpath("train_test_split.npz"))
+
+        self = cls(
+            data["train_X"],
+            data["train_y"],
+            data.get("test_X"),
+            data.get("test_y"),
+            ks=ks,
+        )
+        if not experiment_dir:
+            return self
+
+        experiment_dir = pathlib.Path(experiment_dir)
+        selector_model_file = experiment_dir.joinpath("selector_model.joblib")
+        if selector_model_file.exists():
+            with open(selector_model_file, "rb") as fo:
+                self.model = joblib.load(fo)
+
+        for logreg_exp_dir in experiment_dir.glob("selected_*"):
+            k = logreg_exp_dir.name.split("_")[-1]
+            logreg_exp = LogRegExperiment.load_experiment(logreg_exp_dir)
+            self._logreg_experiments[k] = logreg_exp
+
         return self
 
     def save(self, directory):
@@ -176,9 +191,8 @@ class TopKSelectorsExperiment(object):
         directory.mkdir(exist_ok=True)
 
         if self.selector_model:
-            joblib.dump(
-                self.selector_model, directory.joinpath("selector_model.joblib")
-            )
+            with open(directory.joinpath("selector_model.joblib"), "wb") as fi:
+                joblib.dump(self.selector_model, fi)
 
         for k, exp in self._logreg_experiments.items():
             k_selected_dir = directory.joinpath(f"selected_{k}")
@@ -204,7 +218,7 @@ class TopKSelectorsExperiment(object):
 
             self._logreg_experiments[k] = logreg_exp
 
-    def fit_logreg_experiments(self):
+    def fit_logreg_experiments(self, *args, **kwargs):
         if not self._logreg_experiments:
             self.initialize_logreg_experiments()
         pbar = tqdm.tqdm(
@@ -214,16 +228,21 @@ class TopKSelectorsExperiment(object):
             pbar.set_description(
                 f"Training the LogReg experiments; k={k}", refresh=True
             )
-            exp.train_model()
+            exp.train_model(*args, **kwargs)
 
 
 def main():
-    data_path = "data/pre-plinked"
-    tks = TopKSelectorsExperiment.load_from_data(data_path)
-    tks.fit_feature_selection_model()
-    tks.fit_logreg_experiments()
+    data_path = pathlib.Path("data/pre-plinked")
+    experiment_dir = pathlib.Path("data/logistic_regression_experiments")
+    if experiment_dir.exists():
+        tks = TopKSelectorsExperiment.load_experiment(data_path,
+                                                      experiment_dir=experiment_dir)
+    else:
+        tks = TopKSelectorsExperiment.load_experiment(data_path)
+        tks.fit_feature_selection_model()
 
-    tks.save("data/results_t1")
+    tks.fit_logreg_experiments(refit=False)
+    tks.save(experiment_dir)
 
     for exp in tks._logreg_experiments.values():
         print(exp.results)
