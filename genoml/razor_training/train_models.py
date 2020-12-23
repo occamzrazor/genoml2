@@ -64,24 +64,23 @@ npzfile = np.load(train_file, allow_pickle=True)
 X_train = npzfile['X_train']
 y_train = npzfile['y_train']
 
-
 # Train logistic regression using all the feature selector model files.
 results = {}
-feature_selector_files = glob.glob('feature_selector_*.joblib')
+feature_selector_files = glob.glob('feature_selector_*_*.joblib')
 # NOTE(berk): Update code to accommodate feature selectors with different number of reduced features.
-p = re.compile('feature_selector_(.*).joblib')
+p = re.compile('feature_selector_(.*)_(.*).joblib')
 for feature_selector_file in feature_selector_files:
     m = p.match(feature_selector_file)
     feature_selector_str = m.group(1)
+    num_reduced_features = int(m.group(2))
     start = time.time()
-    print(f'*****Processing feature selector {feature_selector_str}*****')
+    print(f'*****Processing feature selector {feature_selector_str} with {num_reduced_features} features*****')
     feature_selector_model = load(feature_selector_file)
     X_train_reduced = feature_selector_model.transform(X_train)
-    num_features = X_train_reduced.shape[1]
     clf = run_log_reg_cv(X_train_reduced, y_train)
     max_score = np.max(clf.scores_['Control'])
-    results[(feature_selector_str, num_features)] = max_score
-    model_file = (f'logregcv_{feature_selector_str}_{num_features}.joblib')
+    results[(feature_selector_str, num_reduced_features)] = max_score
+    model_file = (f'logregcv_{feature_selector_str}_{num_reduced_features}.joblib')
     dump(clf, model_file)
     end = time.time()
     print(f'*****Processed feature selector {feature_selector_str} in {end - start:.2f} seconds*****')
