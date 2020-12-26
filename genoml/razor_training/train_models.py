@@ -66,10 +66,12 @@ y_train = npzfile['y_train']
 
 # Train logistic regression using all the feature selector model files.
 results = {}
-feature_selector_files = glob.glob('feature_selector_*_*.joblib')
+feature_selector_files = glob.glob('feature_selector_chi2_*.joblib')
 # NOTE(berk): Update code to accommodate feature selectors with different number of reduced features.
-p = re.compile('feature_selector_(.*)_(.*).joblib')
+p = re.compile('feature_selector_(chi2)_(.*).joblib')
 for feature_selector_file in feature_selector_files:
+    if feature_selector_file == 'feature_selector_chi2_50000.joblib':
+        continue
     m = p.match(feature_selector_file)
     feature_selector_str = m.group(1)
     num_reduced_features = int(m.group(2))
