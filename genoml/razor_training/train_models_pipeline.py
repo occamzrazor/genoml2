@@ -50,7 +50,7 @@ y_train = npzfile['y_train']
 
 # Setup grid search to conduct feature selection and logistic regression
 # within cross-validation.
-cachedir = 'temp_models'
+cachedir = 'temp_models_2'
 pipe = pipeline.Pipeline([
     ('reduce_dim', feature_selection.SelectKBest(feature_selection.chi2)),
     ('classify', linear_model.LogisticRegression(penalty='elasticnet',
