@@ -38,7 +38,7 @@ for strategy in strategy_list:
     dummy_scores[strategy] = score
 
 # Load the grid search results.
-grid_search_cv = load('grid_search.joblib')
+grid_search_cv = load('grid_search_2.joblib')
 
 sorted_indices = np.argsort(grid_search_cv.cv_results_['rank_test_score'])
 for i in sorted_indices:
