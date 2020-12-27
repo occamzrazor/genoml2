@@ -15,12 +15,12 @@ RANDOM_STATE = 42
 CV=5
 
 # Feature selection parameters.
-NUM_REDUCED_FEATURES_LIST = [1000, 10000, 50000]
+NUM_REDUCED_FEATURES_LIST = [500, 1000, 2000]
 
 # Logistic regression parameters.
-C_OPTIONS = [1e-4, 1e-2, 1, 100]
-L1_RATIOS = [0, 0.5, 1]
-MAX_ITER = 1000
+C_OPTIONS = [1e-4, 1e-3, 1e-2, 1e-1]
+L1_RATIOS = [0, 0.25, 0.5, 0.75, 1]
+MAX_ITER = 5000
 # NOTE(berk): For debugging purposes, consider setting parameters to smaller values.
 #C_OPTIONS = [1]
 #L1_RATIOS=[0.5]
@@ -38,7 +38,7 @@ GENERAL_VERBOSITY = 1
 LOG_REG_VERBOSITY = 0
 
 # Grid search output file.
-grid_search_output = 'grid_search.joblib'
+grid_search_output = 'grid_search_2.joblib'
 
 # Load the original train data.
 train_file = "train.npz"
