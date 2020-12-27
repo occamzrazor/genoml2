@@ -15,11 +15,11 @@ RANDOM_STATE = 42
 CV=5
 
 # Feature selection parameters.
-NUM_REDUCED_FEATURES_LIST = [500, 1000, 2000]
+NUM_REDUCED_FEATURES_LIST = [250, 500, 1000]
 
 # Logistic regression parameters.
-C_OPTIONS = [1e-4, 1e-3, 1e-2, 1e-1]
-L1_RATIOS = [0, 0.25, 0.5, 0.75, 1]
+C_OPTIONS = [1e-5, 1e-4, 1e-3, 1e-2]
+L1_RATIOS = [0, 0.1, 0.2]
 MAX_ITER = 5000
 # NOTE(berk): For debugging purposes, consider setting parameters to smaller values.
 #C_OPTIONS = [1]
@@ -31,14 +31,14 @@ MAX_ITER = 5000
 SCORING = 'balanced_accuracy'
 
 # NOTE(berk): If memory isn't an issue, I recommend setting it to -2.
-N_JOBS = 8
+N_JOBS = 2
 
 # NOTE(berk): Verbosity.
 GENERAL_VERBOSITY = 1
 LOG_REG_VERBOSITY = 0
 
 # Grid search output file.
-grid_search_output = 'grid_search_2.joblib'
+grid_search_output = 'grid_search_3.joblib'
 
 # Load the original train data.
 train_file = "train.npz"
@@ -50,7 +50,7 @@ y_train = npzfile['y_train']
 
 # Setup grid search to conduct feature selection and logistic regression
 # within cross-validation.
-cachedir = 'temp_models_2'
+cachedir = 'temp_models_3'
 pipe = pipeline.Pipeline([
     ('reduce_dim', feature_selection.SelectKBest(feature_selection.chi2)),
     ('classify', linear_model.LogisticRegression(penalty='elasticnet',
@@ -59,7 +59,7 @@ pipe = pipeline.Pipeline([
                                                  solver='saga',
                                                  max_iter=MAX_ITER,
                                                  verbose=LOG_REG_VERBOSITY,
-                                                 warm_start=True,
+                                                 warm_start=False,
                                                  n_jobs=N_JOBS)),
 ], memory=cachedir, verbose=True)
 
