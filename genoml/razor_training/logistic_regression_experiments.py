@@ -71,7 +71,9 @@ class LogRegExperiment(object):
     def _init_model(
         self,
     ):
-        sss = model_selection.StratifiedShuffleSplit(n_splits=self.cv_count)
+        sss = model_selection.StratifiedShuffleSplit(
+            n_splits=self.cv_count, test_size=0.1
+        )
         self.model = model_selection.GridSearchCV(
             self.pipeline,
             n_jobs=1,  # We do not double parallelize
@@ -183,19 +185,11 @@ class TopKSelectorsExperiment(LogRegExperiment):
 
 def main():
     data_path = pathlib.Path("data/pre-plinked")
-    experiment_dir = pathlib.Path("data/logistic_regression_experiments")
-    # if experiment_dir.joinpath("selector_model.joblib").exists():
-    #     tks = TopKSelectorsExperiment.load_experiment(
-    #         data_path, experiment_dir=experiment_dir
-    #     )
-    # else:
-    tks = TopKSelectorsExperiment.from_data(data_path.joinpath("train_test_split.npz"))
-    # tks = TopKSelectorsExperiment.load_experiment(data_path)
-    # tks.train_x = tks.train_x[:, 0:1100]
-    # tks.test_x = tks.test_x[:, 0:1100]
+    train_test_split = data_path.joinpath("train_test_split.npz")
+    tks = TopKSelectorsExperiment.from_data(train_test_split)
     tks.train_model(refit=False)
 
-    # tks.fit_logreg_experiments(refit=False)
+    experiment_dir = pathlib.Path("data/logistic_regression_experiments")
     tks.save_experiment(experiment_dir)
 
 

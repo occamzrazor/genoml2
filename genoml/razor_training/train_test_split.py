@@ -25,7 +25,7 @@ def get_train_test(pgen_file, psam_file, case_control_file, output_file=None):
     X = plink2_reader.pgen_reader(pgen_file, None, impute="median")
 
     sss = model_selection.StratifiedShuffleSplit(
-        n_splits=1, test_size=0.3, random_state=RANDOM_STATE
+        n_splits=1, test_size=0.1, random_state=RANDOM_STATE
     )
 
     train_idx, test_idx = next(sss.split(X, y))
