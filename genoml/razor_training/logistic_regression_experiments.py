@@ -5,11 +5,20 @@ import joblib
 import numpy as np
 import pandas as pd
 import tqdm
-from sklearn import dummy, feature_selection, linear_model, metrics, model_selection
+from sklearn import (
+    dummy,
+    feature_selection,
+    linear_model,
+    metrics,
+    model_selection,
+    pipeline,
+)
 from sklearn.exceptions import NotFittedError
 from sklearn.utils.validation import check_is_fitted
 
 RANDOM_STATE = 42
+GENERAL_VERBOSITY = 1
+LOG_REG_VERBOSITY = 0
 
 
 class LogRegExperiment(object):
@@ -28,33 +37,61 @@ class LogRegExperiment(object):
 
         self.results: Optional[pd.DataFrame] = None
 
-        self.cv_count = 3
-        self.max_iter = 1000
-        self.l1_ratios = [0, 0.2, 0.5, 0.8, 1]
-        self.Cs = list(np.power(10.0, np.arange(-5, 5)))
+        self.param_grid = {
+            "classify__C": [1e-5, 1e-4, 1e-3, 1e-2],
+            "classify__l1_ratio": [0, 0.1, 0.2],
+        }
+        self.cv_count = 5
+        self.max_iter = 5000
         self.scoring = "balanced_accuracy"
-        self.model = linear_model.LogisticRegressionCV()
-        self.init_model()
+        self._init_pipeline()
+        self._init_model()
 
-    def init_model(self):
+    def _init_pipeline(self):
+        self.pipeline = pipeline.Pipeline(
+            [
+                (
+                    "classify",
+                    linear_model.LogisticRegression(
+                        penalty="elasticnet",
+                        class_weight="balanced",
+                        random_state=RANDOM_STATE,
+                        solver="saga",
+                        max_iter=self.max_iter,
+                        verbose=LOG_REG_VERBOSITY,
+                        warm_start=False,
+                        n_jobs=1,  # We do not double parallelize
+                    ),
+                )
+            ],
+            memory="models_cache",
+            verbose=True,
+        )
+
+    def _init_model(
+        self,
+    ):
         sss = model_selection.StratifiedShuffleSplit(n_splits=self.cv_count)
-        self.model = linear_model.LogisticRegressionCV(
-            Cs=self.Cs,
-            penalty="elasticnet",
-            solver="saga",
-            max_iter=self.max_iter,
-            class_weight="balanced",
+        self.model = model_selection.GridSearchCV(
+            self.pipeline,
             n_jobs=-2,
-            verbose=0,
+            param_grid=self.param_grid,
             scoring=self.scoring,
-            l1_ratios=self.l1_ratios,
-            random_state=RANDOM_STATE,
+            verbose=GENERAL_VERBOSITY,
             cv=sss,
+        )
+
+    @classmethod
+    def from_data(cls, data_path) -> "LogRegExperiment":
+        data = np.load(data_path)
+        return cls(
+            data["train_X"], data["train_y"], data.get("test_X"), data.get("test_y")
         )
 
     @classmethod
     def load_experiment(cls, data_dir) -> "LogRegExperiment":
         data_dir = pathlib.Path(data_dir)
+
         data = np.load(data_dir.joinpath("data.npz"))
         with open(data_dir.joinpath("model.joblib"), "rb") as fo:
             logreg_model = joblib.load(fo)
@@ -111,19 +148,17 @@ class LogRegExperiment(object):
         return self.results
 
     def _score_dummy(self) -> Dict:
-        dummy_freq = dummy.DummyClassifier(
-            strategy="most_frequent", random_state=RANDOM_STATE
-        )
-        dummy_freq.fit(self.train_x, self.train_y)
-        freq_score = _score_model(dummy_freq, self.test_x, self.test_y)
+        scores = dict()
+        for strategy in ["most_frequent", "stratified", "prior", "uniform"]:
+            dummy_cls = dummy.DummyClassifier(
+                strategy=strategy, random_state=RANDOM_STATE
+            )
+            dummy_cls.fit(self.train_x, self.train_y)
+            score = _score_model(dummy_cls, self.test_x, self.test_y)
 
-        dummy_strat = dummy.DummyClassifier(
-            strategy="stratified", random_state=RANDOM_STATE
-        )
-        dummy_strat.fit(self.train_x, self.train_y)
-        strat_score = _score_model(dummy_strat, self.test_x, self.test_y)
+            scores[strategy + "_score"] = score
 
-        return {"frequency_dummy": freq_score, "stratified_score": strat_score}
+        return scores
 
 
 def _score_model(clf, test_x, test_y) -> Dict[str, float]:
@@ -131,127 +166,39 @@ def _score_model(clf, test_x, test_y) -> Dict[str, float]:
     return {"balanced_accuracy": score}
 
 
-class TopKSelectorsExperiment(object):
-    def __init__(
-        self,
-        train_X: np.ndarray,
-        train_y: np.ndarray,
-        test_X: Optional = None,
-        test_y: Optional = None,
-        ks: Optional[List[int]] = None,
-    ):
-        self.train_x = train_X
-        self.train_y = train_y
-
-        self.test_x = test_X
-        self.test_y = test_y
+class TopKSelectorsExperiment(LogRegExperiment):
+    def __init__(self, *args, ks: Optional[List[int]] = None, **kwargs):
+        super().__init__(*args, **kwargs)
 
         if ks is None:
             ks = [100, 1000, 10000]
         ks = [min(self.train_x.shape[1], k) for k in ks]
         self.ks = list(set(ks))
-
-        self._logreg_experiments: Dict[int, LogRegExperiment] = dict()
-
+        self.param_grid["reduce_dim__k"] = self.ks
         self.selector_model = feature_selection.SelectKBest(
             feature_selection.chi2, k=max(self.ks)
         )
-        self.feature_importance = np.empty(0, dtype=np.int)
-
-    @classmethod
-    def load_experiment(
-        cls, data_path, experiment_dir=None, ks=None
-    ) -> "TopKSelectorsExperiment":
-        data_path = pathlib.Path(data_path)
-        data = np.load(data_path.joinpath("train_test_split.npz"))
-
-        self = cls(
-            data["train_X"],
-            data["train_y"],
-            data.get("test_X"),
-            data.get("test_y"),
-            ks=ks,
-        )
-        if not experiment_dir:
-            return self
-
-        experiment_dir = pathlib.Path(experiment_dir)
-        selector_model_file = experiment_dir.joinpath("selector_model.joblib")
-        if selector_model_file.exists():
-            with open(selector_model_file, "rb") as fo:
-                self.model = joblib.load(fo)
-
-        for logreg_exp_dir in experiment_dir.glob("selected_*"):
-            k = int(logreg_exp_dir.name.split("_")[-1])
-            logreg_exp = LogRegExperiment.load_experiment(logreg_exp_dir)
-            self._logreg_experiments[k] = logreg_exp
-
-        return self
-
-    def save(self, directory):
-        directory = pathlib.Path(directory)
-        directory.mkdir(exist_ok=True)
-
-        if self.selector_model:
-            with open(directory.joinpath("selector_model.joblib"), "wb") as fi:
-                joblib.dump(self.selector_model, fi)
-
-        for k, exp in self._logreg_experiments.items():
-            k_selected_dir = directory.joinpath(f"selected_{k}")
-            exp.save_experiment(k_selected_dir)
-
-    def fit_feature_selection_model(self, scoring_funct=None) -> np.ndarray:
-        if scoring_funct is None:
-            scoring_funct = feature_selection.chi2
-        self.selector_model = feature_selection.SelectKBest(
-            scoring_funct, k=max(self.ks)
-        ).fit(self.train_x, self.train_y)
-        self.feature_importance = (-self.selector_model.scores_).argsort()
-        return self.feature_importance
-
-    def initialize_logreg_experiments(self):
-        for k in self.ks:
-            # Initialize the logreg experiments
-            variant_mask = self.feature_importance < k
-            logreg_exp = LogRegExperiment(self.train_x[:, variant_mask], self.train_y)
-            if self.test_x is not None:
-                logreg_exp.test_x = self.test_x[:, variant_mask]
-                logreg_exp.test_y = self.test_y
-
-            self._logreg_experiments[k] = logreg_exp
-
-    def fit_logreg_experiments(self, *args, **kwargs):
-        if not self._logreg_experiments:
-            self.initialize_logreg_experiments()
-        pbar = tqdm.tqdm(
-            self._logreg_experiments.items(), desc="Training the LogReg experiments"
-        )
-        for k, exp in pbar:
-            pbar.set_description(
-                f"Training the LogReg experiments; k={k}", refresh=True
-            )
-            exp.train_model(*args, **kwargs)
+        self.pipeline.steps.insert(0, ("reduce_dim", self.selector_model))
 
 
 def main():
     data_path = pathlib.Path("data/pre-plinked")
     experiment_dir = pathlib.Path("data/logistic_regression_experiments")
-    if experiment_dir.joinpath("selector_model.joblib").exists():
-        tks = TopKSelectorsExperiment.load_experiment(
-            data_path, experiment_dir=experiment_dir
-        )
-    else:
-        tks = TopKSelectorsExperiment.load_experiment(data_path)
-        tks.fit_feature_selection_model()
+    # if experiment_dir.joinpath("selector_model.joblib").exists():
+    #     tks = TopKSelectorsExperiment.load_experiment(
+    #         data_path, experiment_dir=experiment_dir
+    #     )
+    # else:
+    tks = TopKSelectorsExperiment.from_data(data_path.joinpath("train_test_split.npz"))
+    # tks = TopKSelectorsExperiment.load_experiment(data_path)
+    # tks.train_x = tks.train_x[:, 0:1100]
+    # tks.test_x = tks.test_x[:, 0:1100]
+    tks.train_model(refit=False)
 
-    tks.fit_logreg_experiments(refit=False)
-    tks.save(experiment_dir)
-
-    for exp in tks._logreg_experiments.values():
-        print(exp.results)
+    # tks.fit_logreg_experiments(refit=False)
+    tks.save_experiment(experiment_dir)
 
 
 if __name__ == "__main__":
     main()
-    completed = True
     print("Completed!")
