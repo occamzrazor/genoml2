@@ -81,6 +81,7 @@ class LogRegExperiment(object):
             scoring=self.scoring,
             verbose=GENERAL_VERBOSITY,
             cv=sss,
+            refit=_best_model_decider,
         )
 
     @classmethod
@@ -127,7 +128,7 @@ class LogRegExperiment(object):
         else:
             np.savez(data_file, train_X=self.train_x, train_y=self.train_y)
 
-    def train_model(self, refit=False) -> None:
+    def train_model(self, completely_refit=False) -> None:
         fit = True
         try:
             check_is_fitted(self.model)
@@ -135,7 +136,7 @@ class LogRegExperiment(object):
             fit = False
         except Exception as e:
             raise e
-        if not fit or refit:
+        if not fit or completely_refit:
             self.model.fit(self.train_x, self.train_y)
         self.score_model()
 
@@ -146,7 +147,7 @@ class LogRegExperiment(object):
         scores["LogReg"] = _score_model(self.model, self.test_x, self.test_y)
 
         scores.update(self._score_dummy())
-        self.results = pd.DataFrame(scores)
+        self.results = pd.DataFrame(scores).T
         return self.results
 
     def _score_dummy(self) -> Dict:
@@ -168,6 +169,18 @@ def _score_model(clf, test_x, test_y) -> Dict[str, float]:
     return {"balanced_accuracy": score}
 
 
+def _best_model_decider(cv_results_) -> int:
+    """Helps the gridsearchCV decide on the best model to refit.
+
+    :param cv_results_: dict of numpy arrays. Comes directly from the gridsearchCV,
+    :return: The best model's index.
+    """
+    results = pd.DataFrame(cv_results_)
+    results["score_col"] = results["mean_test_score"] - results["std_test_score"]
+    results = results.sort_values(by="score_col", ascending=False)
+    return results.index[0]
+
+
 class TopKSelectorsExperiment(LogRegExperiment):
     def __init__(self, *args, ks: Optional[List[int]] = None, **kwargs):
         super().__init__(*args, **kwargs)
@@ -186,13 +199,20 @@ class TopKSelectorsExperiment(LogRegExperiment):
 def main():
     data_path = pathlib.Path("data/pre-plinked")
     train_test_split = data_path.joinpath("train_test_split.npz")
-    tks = TopKSelectorsExperiment.from_data(train_test_split)
-    tks.train_model(refit=True)
+    data = np.load(train_test_split)
+    tks = TopKSelectorsExperiment(
+        data["train_X"], data["train_y"], data.get("test_X"), data.get("test_y")
+    )
+    del data
+    tks.train_model(completely_refit=False)
 
-    experiment_dir = pathlib.Path("data/logistic_regression_experiments")
+    experiment_dir = pathlib.Path(
+        "data/logistic_regression_experiments/full_experiment"
+    )
     tks.save_experiment(experiment_dir)
+    return tks
 
 
 if __name__ == "__main__":
-    main()
+    final_model = main()
     print("Completed!")
