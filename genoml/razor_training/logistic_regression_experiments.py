@@ -60,7 +60,7 @@ class LogRegExperiment(object):
                         max_iter=self.max_iter,
                         verbose=LOG_REG_VERBOSITY,
                         warm_start=False,
-                        n_jobs=1,  # We do not double parallelize
+                        n_jobs=-2,
                     ),
                 )
             ],
@@ -74,7 +74,7 @@ class LogRegExperiment(object):
         sss = model_selection.StratifiedShuffleSplit(n_splits=self.cv_count)
         self.model = model_selection.GridSearchCV(
             self.pipeline,
-            n_jobs=-2,
+            n_jobs=1,  # We do not double parallelize
             param_grid=self.param_grid,
             scoring=self.scoring,
             verbose=GENERAL_VERBOSITY,
