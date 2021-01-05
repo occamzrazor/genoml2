@@ -109,7 +109,7 @@ class LogRegExperiment(object):
         directory = pathlib.Path(directory)
         directory.mkdir(exist_ok=False)
 
-        with open(directory.joinpath("logreg_model.joblib"), "wb") as fi:
+        with open(directory.joinpath("model.joblib"), "wb") as fi:
             joblib.dump(self.model, fi)
 
         if self.results is not None:
@@ -187,7 +187,7 @@ def main():
     data_path = pathlib.Path("data/pre-plinked")
     train_test_split = data_path.joinpath("train_test_split.npz")
     tks = TopKSelectorsExperiment.from_data(train_test_split)
-    tks.train_model(refit=False)
+    tks.train_model(refit=True)
 
     experiment_dir = pathlib.Path("data/logistic_regression_experiments")
     tks.save_experiment(experiment_dir)
