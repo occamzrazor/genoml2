@@ -4,7 +4,6 @@ from typing import Dict, List, Optional
 import joblib
 import numpy as np
 import pandas as pd
-import tqdm
 from sklearn import (
     dummy,
     feature_selection,
@@ -81,7 +80,7 @@ class LogRegExperiment(object):
             scoring=self.scoring,
             verbose=GENERAL_VERBOSITY,
             cv=sss,
-            refit=_best_model_decider,
+            refit=self._decision_function,
         )
 
     @classmethod
@@ -95,7 +94,15 @@ class LogRegExperiment(object):
     def load_experiment(cls, data_dir) -> "LogRegExperiment":
         data_dir = pathlib.Path(data_dir)
 
-        data = np.load(data_dir.joinpath("data.npz"))
+        data_path = data_dir.joinpath("data.npz")
+        if not data_path.exists():
+            data = {
+                "train_X": np.array([], ndmin=2),
+                "train_y": np.array([], ndmin=2),
+            }
+        else:
+            data = np.load(data_path)
+
         with open(data_dir.joinpath("model.joblib"), "rb") as fo:
             logreg_model = joblib.load(fo)
 
@@ -103,7 +110,9 @@ class LogRegExperiment(object):
             data["train_X"], data["train_y"], data.get("test_X"), data.get("test_y")
         )
         self.model = logreg_model
-        self.score_model()
+
+        if self.test_x:
+            self.score_model()
         return self
 
     def save_experiment(self, directory):
@@ -163,22 +172,22 @@ class LogRegExperiment(object):
 
         return scores
 
+    @staticmethod
+    def _decision_function(cv_results_) -> int:
+        """Helps the gridsearchCV decide on the best model to refit.
+
+        :param cv_results_: dict of numpy arrays. Comes directly from the gridsearchCV,
+        :return: The best model's index.
+        """
+        results = pd.DataFrame(cv_results_)
+        results["score_col"] = results["mean_test_score"] - results["std_test_score"]
+        results = results.sort_values(by="score_col", ascending=False)
+        return results.index[0]
+
 
 def _score_model(clf, test_x, test_y) -> Dict[str, float]:
     score = metrics.balanced_accuracy_score(test_y, clf.predict(test_x))
     return {"balanced_accuracy": score}
-
-
-def _best_model_decider(cv_results_) -> int:
-    """Helps the gridsearchCV decide on the best model to refit.
-
-    :param cv_results_: dict of numpy arrays. Comes directly from the gridsearchCV,
-    :return: The best model's index.
-    """
-    results = pd.DataFrame(cv_results_)
-    results["score_col"] = results["mean_test_score"] - results["std_test_score"]
-    results = results.sort_values(by="score_col", ascending=False)
-    return results.index[0]
 
 
 class TopKSelectorsExperiment(LogRegExperiment):
