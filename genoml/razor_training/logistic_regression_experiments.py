@@ -110,6 +110,7 @@ class LogRegExperiment(object):
             data["train_X"], data["train_y"], data.get("test_X"), data.get("test_y")
         )
         self.model = logreg_model
+        self.pipeline = logreg_model.estimator
 
         if self.test_x:
             self.score_model()
