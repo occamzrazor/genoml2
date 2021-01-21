@@ -15,6 +15,8 @@ from sklearn import (
 from sklearn.exceptions import NotFittedError
 from sklearn.utils.validation import check_is_fitted
 
+from genoml.preprocessing import plink2_reader
+
 RANDOM_STATE = 42
 GENERAL_VERBOSITY = 1
 LOG_REG_VERBOSITY = 0
@@ -27,6 +29,7 @@ class LogRegExperiment(object):
         train_y: np.ndarray,
         test_x: Optional[np.ndarray] = None,
         test_y: Optional[np.ndarray] = None,
+        _cache_dir="models_cache"
     ):
         self.train_x = train_x
         self.train_y = train_y
@@ -43,10 +46,11 @@ class LogRegExperiment(object):
         self.cv_count = 5
         self.max_iter = 5000
         self.scoring = "balanced_accuracy"
-        self._init_pipeline()
+        self._cache_dir = _cache_dir
+        self._init_pipeline(self._cache_dir)
         self._init_model()
 
-    def _init_pipeline(self):
+    def _init_pipeline(self, _cache_dir: str):
         self.pipeline = pipeline.Pipeline(
             [
                 (
@@ -63,7 +67,7 @@ class LogRegExperiment(object):
                     ),
                 )
             ],
-            memory="models_cache",
+            memory=_cache_dir,
             verbose=True,
         )
 
@@ -112,7 +116,7 @@ class LogRegExperiment(object):
         self.model = logreg_model
         self.pipeline = logreg_model.estimator
 
-        if self.test_x:
+        if self.test_x is not None:
             self.score_model()
         return self
 
@@ -139,16 +143,21 @@ class LogRegExperiment(object):
             np.savez(data_file, train_X=self.train_x, train_y=self.train_y)
 
     def train_model(self, completely_refit=False) -> None:
+        self._train_model(self.model, self.train_x, self.train_y, completely_refit)
+        self.score_model()
+
+    @staticmethod
+    def _train_model(model, x, y, completely_refit: bool = False):
         fit = True
         try:
-            check_is_fitted(self.model)
+            check_is_fitted(model)
         except NotFittedError:
             fit = False
         except Exception as e:
             raise e
         if not fit or completely_refit:
-            self.model.fit(self.train_x, self.train_y)
-        self.score_model()
+            model.fit(x, y)
+        return model
 
     def score_model(self):
         if self.test_y is None:
@@ -204,6 +213,34 @@ class TopKSelectorsExperiment(LogRegExperiment):
             feature_selection.chi2, k=max(self.ks)
         )
         self.pipeline.steps.insert(0, ("reduce_dim", self.selector_model))
+
+    def extract_top_k_features(
+            self, original_pvar_file, to_csv_file: Optional[str] = None
+    ) -> pd.DataFrame:
+        """Extracts the top K features from the best estimator model.
+
+        Note:
+            The model must be trained for this function to work.
+
+        :param original_pvar_file: The original pvar corresponding to the full features
+            in the X.
+        :param to_csv_file: Optional file to output the top K features to.
+        :return: An ordered dataframe of the top K features, ordered by most influential
+            to least influential.
+        """
+        pvar_df = plink2_reader.pvar_reader(original_pvar_file, False)
+
+        check_is_fitted(self.model.best_estimator_)
+        pvar_mask = self.model.best_estimator_.steps[0][-1].get_support()
+        best_k = pvar_mask.sum()
+
+        top_k_df = pvar_df.loc[pvar_mask, :]
+        logreg_coefs = self.model.best_estimator_.steps[-1][-1].coef_
+        logreg_coefs_order = (-np.abs(logreg_coefs)).argsort().reshape(best_k)
+        top_k_df = top_k_df.iloc[logreg_coefs_order]
+        if to_csv_file is not None:
+            top_k_df.to_csv(to_csv_file, index=False)
+        return top_k_df
 
 
 def main():
