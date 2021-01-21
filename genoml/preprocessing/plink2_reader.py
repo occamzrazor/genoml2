@@ -116,6 +116,18 @@ def pvar_reader(pvar_file, info=False) -> pd.DataFrame:
     return pvar_df
 
 
+def pvar_header_reader(pvar_file) -> str:
+    pvar_file = pathlib.Path(pvar_file)
+    with open(pvar_file, "r") as f:
+        lines = []
+        for line in f:
+            if line.startswith("#"):
+                lines.append(line)
+            else:
+                break
+    return "".join(lines)
+
+
 def psam_reader(psam_file) -> pd.DataFrame:
     psam_file = pathlib.Path(psam_file)
     df = pd.read_csv(
