@@ -86,23 +86,28 @@ def pgen_reader(pgen_file, output_file=None, ref_allele=0, impute=None) -> np.nd
     return complete_array
 
 
-def pvar_reader(pvar_file) -> pd.DataFrame:
+def pvar_reader(pvar_file, info=False) -> pd.DataFrame:
     pvar_file = pathlib.Path(pvar_file)
     print("Reading in the Pvar file")
+    use_cols = ["CHROM", "POS", "ID", "REF", "ALT", "QUAL"]
+    dtypes = {
+        "CRHOM": str,
+        "POS": str,
+        "ID": str,
+        "REF": str,
+        "ALT": str,
+        "QUAL": float,
+    }
+    if info:
+        use_cols += ["INFO"]
+        dtypes["INFO"] = str
     pvar_df = pd.read_csv(
         pvar_file,
         sep="\t",
         comment="#",
         names=["CHROM", "POS", "ID", "REF", "ALT", "QUAL", "FILTER", "INFO"],
-        usecols=["CHROM", "POS", "ID", "REF", "ALT", "QUAL"],
-        dtype={
-            "CRHOM": str,
-            "POS": str,
-            "ID": str,
-            "REF": str,
-            "ALT": str,
-            "QUAL": float,
-        },
+        usecols=use_cols,
+        dtype=dtypes,
         index_col=False,
         low_memory=False,
     )
