@@ -29,7 +29,7 @@ class LogRegExperiment(object):
         train_y: np.ndarray,
         test_x: Optional[np.ndarray] = None,
         test_y: Optional[np.ndarray] = None,
-        _cache_dir="models_cache"
+        _cache_dir="models_cache",
     ):
         self.train_x = train_x
         self.train_y = train_y
@@ -215,7 +215,7 @@ class TopKSelectorsExperiment(LogRegExperiment):
         self.pipeline.steps.insert(0, ("reduce_dim", self.selector_model))
 
     def extract_top_k_features(
-            self, original_pvar_file, to_csv_file: Optional[str] = None
+        self, original_pvar_file, to_csv_file: Optional[str] = None
     ) -> pd.DataFrame:
         """Extracts the top K features from the best estimator model.
 
