@@ -87,6 +87,13 @@ def pgen_reader(pgen_file, output_file=None, ref_allele=0, impute=None) -> np.nd
 
 
 def pvar_reader(pvar_file, info=False) -> pd.DataFrame:
+    """Reads .pvar files as a dataframe.
+
+    :param pvar_file: The pvar file to be read.
+    :param info: if the INFO column should be included in the dataframe. Unnecessary
+        unless this column is explicitly going to be used.
+    :return:
+    """
     pvar_file = pathlib.Path(pvar_file)
     print("Reading in the Pvar file")
     use_cols = ["CHROM", "POS", "ID", "REF", "ALT", "QUAL"]
@@ -117,6 +124,7 @@ def pvar_reader(pvar_file, info=False) -> pd.DataFrame:
 
 
 def pvar_header_reader(pvar_file) -> str:
+    """Reads the comment sections of a pvar file."""
     pvar_file = pathlib.Path(pvar_file)
     with open(pvar_file, "r") as f:
         lines = []
@@ -129,6 +137,7 @@ def pvar_header_reader(pvar_file) -> str:
 
 
 def psam_reader(psam_file) -> pd.DataFrame:
+    """Reads psam files as a dataframe."""
     psam_file = pathlib.Path(psam_file)
     df = pd.read_csv(
         psam_file,
