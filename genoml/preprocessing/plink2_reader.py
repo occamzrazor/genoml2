@@ -72,7 +72,9 @@ def pgen_reader(pgen_file, output_file=None, ref_allele=0, impute=None) -> np.nd
             elif not impute:
                 pass
             else:
-                raise NotImplementedError(f"{impute} imputation has not been implemented yet.")
+                raise NotImplementedError(
+                    f"{impute} imputation has not been implemented yet."
+                )
             blocks.append(buf)
 
     print("Merging chunks into a coherent array")
