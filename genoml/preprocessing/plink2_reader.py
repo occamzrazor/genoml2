@@ -118,8 +118,10 @@ def pvar_reader(pvar_file, info=False) -> pd.DataFrame:
         index_col=False,
         low_memory=False,
     )
+    # Set types again so they STICK this time
     pvar_df["POS"] = pvar_df["POS"].astype(int)
     pvar_df["QUAL"] = pvar_df["QUAL"].astype(float)
+    pvar_df["CHROM"] = pvar_df["CHROM"].astype(str)
     return pvar_df
 
 

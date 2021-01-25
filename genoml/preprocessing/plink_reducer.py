@@ -1,9 +1,10 @@
 from genoml.preprocessing import plink2_reader
 from graph_data import gencode
-from typing import Optional
+from typing import Optional, Dict, Tuple
 import pgenlib
 import numpy as np
 import os
+import pandas as pd
 
 
 class PlinkReducer(object):
@@ -17,13 +18,13 @@ class PlinkReducer(object):
     reduced_pvar = reducer.reduce_pvar(True)
     reducer.reduce_pgen(reduced_pvar)
     """
+
     def __init__(self, file_prefix: str, k: int):
         self.file_path = file_prefix
         self.k = k
         self.indices = None
 
-
-    def get_genecode_data(self):
+    def get_genecode_data(self) -> pd.DataFrame:
         """
         Returns genecode dataset in Graph Data.
         """
@@ -31,10 +32,20 @@ class PlinkReducer(object):
         db.install()
         db.load()
         gencode_data = db.datasets[0].data.copy()
+        gencode_data.sort_values(by="TSS", ignore_index=True)
         gencode_data["CHROM"] = gencode_data["chr"].str.strip("chr")
         gencode_data["lower_bound"] = gencode_data["TSS"] - self.k
         gencode_data["upper_bound"] = gencode_data["TSS"] + self.k
         return gencode_data
+
+    def get_genecode_by_chr(self) -> Dict[str, Tuple[np.ndarray, np.ndarray]]:
+        gencode_data = self.get_genecode_data()
+        gencode_split = dict()
+        for chr, df in gencode_data.groupby(by="CHROM"):
+            upper_bound = df["upper_bound"].astype(int).to_numpy()
+            lower_bound = df["lower_bound"].astype(int).to_numpy()
+            gencode_split[chr] = (lower_bound, upper_bound)
+        return gencode_split
 
     def pvar_file(self):
         """
@@ -58,6 +69,25 @@ class PlinkReducer(object):
             pvar_frame.append(pvar_sample)
         self.indices = np.concatenate(pvar_frame).ravel()
         del gencode_data, pvar_frame
+        return self.indices
+
+    def get_variants2(self, pvar_df: pd.DataFrame):
+        """
+        Note: Might be memory intensive.
+
+        :param pvar_df:
+        :return:
+        """
+        gencode_split = self.get_genecode_by_chr()
+        self.indices = []
+        for chr, df in pvar_df.groupby(by="CHROM"):
+            lower_bound, upper_bound = gencode_split[chr]
+            loci = df["POS"].to_numpy()
+            lower_bound_check = lower_bound <= loci.reshape(-1, 1)
+            upper_bound_check = loci.reshape(-1, 1) <= upper_bound
+            bound_check = (lower_bound_check & upper_bound_check).any(axis=1)
+            self.indices.append(df[bound_check].index.to_numpy())
+        self.indices = np.concatenate(self.indices)
         return self.indices
 
     def reduce_pvar(self, outfile: Optional[bool] = False):
@@ -110,7 +140,6 @@ class PlinkReducer(object):
                         infile.read_alleles_and_phasepresent(variant, allele_code_buf, phasepresent_buf)
                         outfile.append_partially_phased(allele_code_buf, phasepresent_buf)
         print('Pgen file has been reduced!')
-        return
 
 
 if __name__ == "__main__":
