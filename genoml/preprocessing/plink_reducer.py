@@ -3,6 +3,7 @@ from graph_data import gencode
 from typing import Optional
 import pgenlib
 import numpy as np
+import os
 
 
 class PlinkReducer(object):
@@ -49,17 +50,12 @@ class PlinkReducer(object):
         chrom = df['CHROM'].to_numpy()
         gencode_data = self.get_genecode_data()
         pvar_frame = []
-
-        c = 0
         for _, row in gencode_data.iterrows():
             chromosome = str(row["CHROM"])
             lower = row["lower_bound"]
             upper = row["upper_bound"]
             pvar_sample = np.where((chrom == chromosome) & (pos >= lower) & (pos < upper))[0]
             pvar_frame.append(pvar_sample)
-            c+=1
-            if c>1:
-                break
         self.indices = np.concatenate(pvar_frame).ravel()
         del gencode_data, pvar_frame
         return self.indices
@@ -118,7 +114,7 @@ class PlinkReducer(object):
 
 
 if __name__ == "__main__":
-    file_prefix = '/Users/mdmcastanos/genoml2/genoml/razor_training/data/pre-plinked/ldpruned_data'
+    file_prefix = os.getcwd() + '/data/pre-plinked/ldpruned_data'
     k = 5000
     reducer = PlinkReducer(file_prefix, k)
     reduced_pvar = reducer.reduce_pvar(True)
