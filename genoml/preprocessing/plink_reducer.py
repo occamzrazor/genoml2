@@ -4,7 +4,6 @@ from typing import Optional, Dict, Tuple
 import pgenlib
 import numpy as np
 import os
-import pathlib
 import pandas as pd
 
 
@@ -75,34 +74,33 @@ class Plink2ReducerBase(object):
     def _get_keep_variant_mask(lower_bound_check, upper_bound_check) -> np.ndarray:
         raise NotImplementedError
 
-    def reduce(self, output_prefix):
-        # TODO (Maria)
+    def reduce_and_output(self, pfile_prefix: str):
+        """Outputs all the pfiles according to plink format."""
         if not self.check_variants_computed():
             self.compute_variants()
         # Output psam
-
+        outfile = pfile_prefix + 'reduced.psam'
+        psam_file = plink2_reader.psam_reader(pfile_prefix + '.psam')
+        with open(outfile, 'w') as f:
+            psam_file.to_csv(f, sep="\t", index=False, header=None)
         # Output pvar
-
+        outfile = pfile_prefix + 'reduced.pvar'
+        self.reduce_pvar(outfile)
         # Output pgen
+        self.reduce_pgen(self.variant_indices)
 
-    def reduce_pvar(self, outfile: Optional[bool] = False):
+    def reduce_pvar(self, outfile: Optional[str] = None):
         """
         Reduces the pvar file by keeping the variants found by the compute_variants() function.
         """
-        df = self.pvar_df
-        # indices = self.compute_variants(df)
         self.check_variants_computed(exception=True)
-        # TODO(Maria): We cannot change the format of the pvar file, we want it to
-        #  continue to be compatible with plink2. The new pvar file should look very
-        #  similar to the old pvar files, with just the rows changed.
-        df = df.to_numpy()
-        reduced_pvar = df[indices]
+        reduced_pvar = self.pvar_df[self.variant_indices]
         print("Pvar file has been reduced!")
-        del df
         if outfile:
-            outfile = self.file_path + "reduced.pvar"
-            with open(outfile, "wb") as f:
-                np.save(f, reduced_pvar)
+            pvar_header = plink2_reader.pvar_header_reader(self.file_path + '.pvar')
+            with open(outfile, "w") as f:
+                f.write(pvar_header)
+                reduced_pvar.to_csv(f, sep="\t", index=False, header=None)
         return reduced_pvar
 
     def reduce_pgen(self, keep_variants: np.array):
