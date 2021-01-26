@@ -4,6 +4,7 @@ from typing import Optional, Dict, Tuple
 import pgenlib
 import numpy as np
 import os
+import pathlib
 import pandas as pd
 
 
@@ -26,6 +27,7 @@ class Plink2ReducerBase(object):
         self.file_path = file_prefix
         self.variant_indices = None
         self.__pvar_df = None
+        self.chr_splits: Dict = self._get_splits()
 
     @property
     def pvar_df(self):
@@ -41,6 +43,36 @@ class Plink2ReducerBase(object):
 
         :return: The variants to reduce the plink2 files to.
         """
+        self.variant_indices = list()
+        for chr, df in self.pvar_df.groupby(by="CHROM"):
+            if chr not in self.chr_splits:
+                self.variant_indices.append(self._handle_missing_chromosome_regions(df))
+                continue
+            lower_bound, upper_bound = self.chr_splits[chr]
+
+            loci = df["POS"].to_numpy()
+            lower_bound_check = lower_bound <= loci.reshape(-1, 1)
+            upper_bound_check = loci.reshape(-1, 1) <= upper_bound
+            variant_mask = self._get_keep_variant_mask(
+                lower_bound_check, upper_bound_check
+            )
+
+            self.variant_indices.append(
+                df[variant_mask].index.to_numpy(dtype=np.uint32)
+            )
+        self.variant_indices = np.concatenate(self.variant_indices)
+        return self.variant_indices
+
+    def _get_splits(self) -> Dict[str, Tuple[np.ndarray, np.ndarray]]:
+        """"""
+        raise NotImplementedError
+
+    @staticmethod
+    def _handle_missing_chromosome_regions(df: pd.DataFrame) -> np.ndarray:
+        raise NotImplementedError
+
+    @staticmethod
+    def _get_keep_variant_mask(lower_bound_check, upper_bound_check) -> np.ndarray:
         raise NotImplementedError
 
     def reduce(self, output_prefix):
@@ -120,66 +152,109 @@ class Plink2ReducerBase(object):
                         )
         print("Pgen file has been reduced!")
 
-    def check_variants_computed(self, exception=False):
+    def check_variants_computed(self, raise_exception=False):
         check = self.variant_indices is None
-        if check and exception:
+        if check and raise_exception:
             raise Exception(
                 "Please run `.compute_variants()` before running the "
-                "`.reudce_` commands"
+                "`.reudce` commands"
             )
         return check
 
 
-class GencodePromotorReducer(Plink2ReducerBase):
-    def __init__(self, *args, k: int = 5000, **kwargs):
-        super.__init__(*args, **kwargs)
-        self.k = k
+class InclusiveReducer(Plink2ReducerBase):
+    @staticmethod
+    def _handle_missing_chromosome_regions(df: pd.DataFrame) -> np.ndarray:
+        return np.array([])
+
+    @staticmethod
+    def _get_keep_variant_mask(lower_bound_check, upper_bound_check) -> np.ndarray:
+        return (lower_bound_check & upper_bound_check).any(axis=1)
+
+
+class ExclusiveReducer(Plink2ReducerBase):
+    @staticmethod
+    def _handle_missing_chromosome_regions(df: pd.DataFrame) -> np.ndarray:
+        return df.index.to_numpy(dtype=np.unint32)
+
+    @staticmethod
+    def _get_keep_variant_mask(lower_bound_check, upper_bound_check) -> np.ndarray:
+        return ~(lower_bound_check & upper_bound_check).any(axis=1)
+
+
+class GencodeReducer(InclusiveReducer):
+    def __init__(
+        self,
+        *args,
+        dataset_name: str = "gene_annotation",
+        tss_distance: Optional[int] = None,
+        **kwargs,
+    ):
+        dataset_name = dataset_name.lower()
+        if dataset_name not in {"gene_annotation", "exon_annotation"}:
+            raise ValueError(
+                "The value of gencode must be one of: "
+                '{"gene_annotation", "exon_annotation"}.\n'
+                f"Not: {dataset_name}."
+            )
+        self.gencode_dataset_name = dataset_name
         self.__gencode_df = None
+        self.tss_distance = tss_distance
+        super().__init__(*args, **kwargs)
 
     @property
     def _gencode_df(self):
-        if self.__gencode_df is None:
-            self.__gencode_df = get_gencode_data()
-            self.__gencode_df["lower_bound"] = self.__gencode_df["TSS"] - self.k
-            self.__gencode_df["upper_bound"] = self.__gencode_df["TSS"] + self.k
-        # We could return a copy but might take longer? Assume that users are going to
-        # mutate this.
+        if self.__gencode_df is not None:
+            # We could return a copy but might take longer? Assume that users are going to
+            # mutate this.
+            return self.__gencode_df
+        self.__gencode_df = get_gencode_data(self.gencode_dataset_name)
+        if self.tss_distance and self.gencode_dataset_name == "gene_annotation":
+            self.__gencode_df["lower_bound"] = (
+                self.__gencode_df["TSS"] - self.tss_distance
+            )
+            self.__gencode_df["upper_bound"] = (
+                self.__gencode_df["TSS"] + self.tss_distance
+            )
+        else:
+            self.__gencode_df = self.__gencode_df.rename(
+                {"start": "lower_bound", "end": "upper_bound"}, axis=1
+            )
+
         return self.__gencode_df
 
-    def get_genecode_by_chr(self) -> Dict[str, Tuple[np.ndarray, np.ndarray]]:
+    def _get_splits(self) -> Dict[str, Tuple[np.ndarray, np.ndarray]]:
         gencode_split = dict()
         for chr, df in self._gencode_df.groupby(by="CHROM"):
-            upper_bound = df["upper_bound"].astype(int).to_numpy()
-            lower_bound = df["lower_bound"].astype(int).to_numpy()
+            upper_bound = df["upper_bound"].to_numpy(dtype=int)
+            lower_bound = df["lower_bound"].to_numpy(dtype=int)
             gencode_split[chr] = (lower_bound, upper_bound)
         return gencode_split
 
-    def compute_variants(self) -> np.ndarray:
-        """Computes all variants +/-
-        Note: Might be memory intensive.
 
-        :return: All variant_indices within the ranges specified by Gencode.
-        """
-        gencode_split = self.get_genecode_by_chr()
-        self.variant_indices = []
-        for chr, df in self.pvar_df.groupby(by="CHROM"):
-            lower_bound, upper_bound = gencode_split[chr]
-            loci = df["POS"].to_numpy()
-            lower_bound_check = lower_bound <= loci.reshape(-1, 1)
-            upper_bound_check = loci.reshape(-1, 1) <= upper_bound
-            bound_check = (lower_bound_check & upper_bound_check).any(axis=1)
-            self.variant_indices.append(df[bound_check].index.to_numpy())
-        self.variant_indices = np.concatenate(self.variant_indices)
-        return self.variant_indices
+class ENCODEBlackListReducer(ExclusiveReducer):
+    def __init__(self, *args, encode_blacklist_file: str, **kwargs):
+        self.encode_blacklist = pd.read_csv(
+            encode_blacklist_file, sep="\t", names=["chr", "start", "stop"]
+        )
+        super().__init__(*args, **kwargs)
+
+    def _get_splits(self) -> Dict[str, Tuple[np.ndarray, np.ndarray]]:
+        splits = dict()
+        for chr, blacklist in self.encode_blacklist.groupby(by="chr"):
+            chr = chr[3:]  # Map to how plink has the CHROMs
+            splits[chr] = (blacklist["start"].to_numpy(), blacklist["stop"].to_numpy())
+        return splits
 
 
-def get_gencode_data() -> pd.DataFrame:
+def get_gencode_data(dataset_name: str) -> pd.DataFrame:
     """Gets the Gencode data from graph-data"""
     db = gencode.GencodeDatabase()
-    db.install()
+    db.install(True, True)
     db.load()
-    gencode_data = db.datasets[0].data.copy()
-    gencode_data.sort_values(by="TSS", ignore_index=True)
+    gencode_data = db.dataset(dataset_name).data.copy()
+    if dataset_name == "gene_annotation":
+        gencode_data.sort_values(by="TSS", ignore_index=True)
     gencode_data["CHROM"] = gencode_data["chr"].str.strip("chr")
     return gencode_data
 
@@ -187,9 +262,7 @@ def get_gencode_data() -> pd.DataFrame:
 if __name__ == "__main__":
     file_prefix = os.getcwd() + "/data/pre-plinked/ldpruned_data"
     k = 5000
-    reducer = GencodePromotorReducer(file_prefix, k)
-    reduced_pvar = reducer.reduce_pvar(True)
-    reducer.reduce_pgen(reduced_pvar)
+    reducer = GencodeReducer(file_prefix, tss_distance=k)
 
 
 """
