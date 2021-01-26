@@ -165,20 +165,24 @@ class Plink2ReducerBase(object):
 class InclusiveReducer(Plink2ReducerBase):
     @staticmethod
     def _handle_missing_chromosome_regions(df: pd.DataFrame) -> np.ndarray:
+        """Ignore all variants when there are no inclusive regions."""
         return np.array([])
 
     @staticmethod
     def _get_keep_variant_mask(lower_bound_check, upper_bound_check) -> np.ndarray:
+        """Only keep regions within and upper and lower bound region."""
         return (lower_bound_check & upper_bound_check).any(axis=1)
 
 
 class ExclusiveReducer(Plink2ReducerBase):
     @staticmethod
     def _handle_missing_chromosome_regions(df: pd.DataFrame) -> np.ndarray:
+        """Keep all variants if there are no exclusive regions."""
         return df.index.to_numpy(dtype=np.unint32)
 
     @staticmethod
     def _get_keep_variant_mask(lower_bound_check, upper_bound_check) -> np.ndarray:
+        """Only include variants outside the exclusive bounds."""
         return ~(lower_bound_check & upper_bound_check).any(axis=1)
 
 
