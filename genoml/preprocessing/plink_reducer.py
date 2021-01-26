@@ -9,6 +9,7 @@ import pandas as pd
 
 
 CHUNK_SIZE = int(1e5)
+POSSIBLE_VEP_IMPACTS = ["HIGH", "MODERATE", "LOW", "MODIFIER"]
 
 
 class Plink2ReducerBase(object):
@@ -27,7 +28,6 @@ class Plink2ReducerBase(object):
         self.file_path = file_prefix
         self.variant_indices = None
         self.__pvar_df = None
-        self.chr_splits: Dict = self._get_splits()
 
     @property
     def pvar_df(self):
@@ -43,36 +43,6 @@ class Plink2ReducerBase(object):
 
         :return: The variants to reduce the plink2 files to.
         """
-        self.variant_indices = list()
-        for chr, df in self.pvar_df.groupby(by="CHROM"):
-            if chr not in self.chr_splits:
-                self.variant_indices.append(self._handle_missing_chromosome_regions(df))
-                continue
-            lower_bound, upper_bound = self.chr_splits[chr]
-
-            loci = df["POS"].to_numpy()
-            lower_bound_check = lower_bound <= loci.reshape(-1, 1)
-            upper_bound_check = loci.reshape(-1, 1) <= upper_bound
-            variant_mask = self._get_keep_variant_mask(
-                lower_bound_check, upper_bound_check
-            )
-
-            self.variant_indices.append(
-                df[variant_mask].index.to_numpy(dtype=np.uint32)
-            )
-        self.variant_indices = np.concatenate(self.variant_indices)
-        return self.variant_indices
-
-    def _get_splits(self) -> Dict[str, Tuple[np.ndarray, np.ndarray]]:
-        """"""
-        raise NotImplementedError
-
-    @staticmethod
-    def _handle_missing_chromosome_regions(df: pd.DataFrame) -> np.ndarray:
-        raise NotImplementedError
-
-    @staticmethod
-    def _get_keep_variant_mask(lower_bound_check, upper_bound_check) -> np.ndarray:
         raise NotImplementedError
 
     def reduce(self, output_prefix):
@@ -162,7 +132,50 @@ class Plink2ReducerBase(object):
         return check
 
 
-class InclusiveReducer(Plink2ReducerBase):
+class RegionReducer(Plink2ReducerBase):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.chr_splits: Dict = self._get_splits()
+
+    def compute_variants(self) -> np.ndarray:
+        """Computes the variants to reduce the plink file to.
+
+        :return: The variants to reduce the plink2 files to.
+        """
+        self.variant_indices = list()
+        for chr, df in self.pvar_df.groupby(by="CHROM"):
+            if chr not in self.chr_splits:
+                self.variant_indices.append(self._handle_missing_chromosome_regions(df))
+                continue
+            lower_bound, upper_bound = self.chr_splits[chr]
+
+            loci = df["POS"].to_numpy()
+            lower_bound_check = lower_bound <= loci.reshape(-1, 1)
+            upper_bound_check = loci.reshape(-1, 1) <= upper_bound
+            variant_mask = self._get_keep_variant_mask(
+                lower_bound_check, upper_bound_check
+            )
+
+            self.variant_indices.append(
+                df[variant_mask].index.to_numpy(dtype=np.uint32)
+            )
+        self.variant_indices = np.concatenate(self.variant_indices)
+        return self.variant_indices
+
+    def _get_splits(self) -> Dict[str, Tuple[np.ndarray, np.ndarray]]:
+        """"""
+        raise NotImplementedError
+
+    @staticmethod
+    def _handle_missing_chromosome_regions(df: pd.DataFrame) -> np.ndarray:
+        raise NotImplementedError
+
+    @staticmethod
+    def _get_keep_variant_mask(lower_bound_check, upper_bound_check) -> np.ndarray:
+        raise NotImplementedError
+
+
+class InclusiveReducer(RegionReducer):
     @staticmethod
     def _handle_missing_chromosome_regions(df: pd.DataFrame) -> np.ndarray:
         """Ignore all variants when there are no inclusive regions."""
@@ -174,7 +187,7 @@ class InclusiveReducer(Plink2ReducerBase):
         return (lower_bound_check & upper_bound_check).any(axis=1)
 
 
-class ExclusiveReducer(Plink2ReducerBase):
+class ExclusiveReducer(RegionReducer):
     @staticmethod
     def _handle_missing_chromosome_regions(df: pd.DataFrame) -> np.ndarray:
         """Keep all variants if there are no exclusive regions."""
@@ -251,10 +264,33 @@ class ENCODEBlackListReducer(ExclusiveReducer):
         return splits
 
 
+class VEPReducer(Plink2ReducerBase):
+    def __init__(self, *args, lowest_impact: str = "HIGH", **kwargs):
+        super().__init__(*args, **kwargs)
+        if lowest_impact.upper() not in POSSIBLE_VEP_IMPACTS:
+            raise ValueError(
+                f"The value of lowest impact must be one of {POSSIBLE_VEP_IMPACTS}."
+            )
+        self.lowest_impact = lowest_impact
+
+    def compute_variants(self) -> np.ndarray:
+        self.variant_indices = list()
+        for impact in POSSIBLE_VEP_IMPACTS:
+            impact_variants = self.pvar_df[
+                self.pvar_df["INFO"].str.lower().str.contains(impact.lower())
+            ]
+            self.variant_indices.append(impact_variants.index.to_numpy(dtype=np.uint32))
+            if impact == self.lowest_impact:
+                break
+
+        self.variant_indices = np.concatenate(self.variant_indices)
+        return self.variant_indices
+
+
 def get_gencode_data(dataset_name: str) -> pd.DataFrame:
     """Gets the Gencode data from graph-data"""
     db = gencode.GencodeDatabase()
-    db.install(True, True)
+    db.install()
     db.load()
     gencode_data = db.dataset(dataset_name).data.copy()
     if dataset_name == "gene_annotation":
@@ -264,9 +300,34 @@ def get_gencode_data(dataset_name: str) -> pd.DataFrame:
 
 
 if __name__ == "__main__":
-    file_prefix = os.getcwd() + "/data/pre-plinked/ldpruned_data"
+    # file_prefix = os.getcwd() + "/data/pre-plinked/ldpruned_data"
+    file_prefix = "data/patient_data/ld_pruned/chr1/chr1_ldpruned"
     k = 5000
-    reducer = GencodeReducer(file_prefix, tss_distance=k)
+
+    gencode_tss_check = GencodeReducer(file_prefix=file_prefix, tss_distance=5e3)
+    gencode_tss_variants = gencode_tss_check.compute_variants()
+    gencode_tss_size = len(gencode_tss_variants)
+    original_size = gencode_tss_check.pvar_df.shape[0]
+
+    gencode_gene_check = GencodeReducer(file_prefix=file_prefix)
+    gencode_gene_variants = gencode_gene_check.compute_variants()
+    gencode_gene_size = len(gencode_gene_variants)
+
+    gencode_exon_check = GencodeReducer(
+        file_prefix=file_prefix, dataset_name="exon_annotation"
+    )
+    gencode_exon_variants = gencode_exon_check.compute_variants()
+    gencode_exon_size = len(gencode_exon_variants)
+
+    vep_check = VEPReducer(file_prefix=file_prefix, lowest_impact="moderate")
+    vep_variants = vep_check.compute_variants()
+    vep_size = len(vep_variants)
+
+    encode_check = ENCODEBlackListReducer(
+        file_prefix=file_prefix, encode_blacklist_file="data/hg38/ENCFF356LFX.bed.gz"
+    )
+    encode_variants = encode_check.compute_variants()
+    encode_size = len(encode_variants)
 
 
 """
